@@ -169,3 +169,22 @@ test('复习选词优先保留最到期词语，冲突时保留更多可用词',
   const characters = selected.flatMap((record) => Array.from(new Set(record.word)));
   assert.equal(new Set(characters).size, characters.length);
 });
+
+test('区分当日复习和合并复习的候选词语', () => {
+  const core = loadCore();
+  const attempt = (date, result) => [{ sessionId: 'seed', date, result }];
+  const wordStats = {
+    太阳: { word: '太阳', attempts: attempt('2026-10-15', 'known'), nextReview: '2026-10-17' },
+    月亮: { word: '月亮', attempts: attempt('2026-10-15', 'fuzzy'), nextReview: '2026-10-15' },
+    白云: { word: '白云', attempts: attempt('2026-10-15', 'unknown'), nextReview: '2026-10-15' },
+    星星: { word: '星星', attempts: attempt('2026-10-14', 'fuzzy'), nextReview: '2026-10-15' },
+    花朵: { word: '花朵', attempts: attempt('2026-10-14', 'known').concat(attempt('2026-10-15', 'unknown')), nextReview: '2026-10-15' },
+  };
+  const sessions = [
+    { date: '2026-10-15', words: ['太阳', '月亮', '白云', '花朵'], results: { 太阳: 'known', 月亮: 'fuzzy', 白云: 'unknown', 花朵: 'unknown' } },
+  ];
+  const today = core.getReviewCandidates(wordStats, sessions, '2026-10-15', 'today');
+  assert.deepEqual(Array.from(today, (record) => record.word).sort(), ['月亮', '白云', '花朵'].sort());
+  const merged = core.getReviewCandidates(wordStats, sessions, '2026-10-15', 'merged');
+  assert.deepEqual(Array.from(merged, (record) => record.word).sort(), ['月亮', '白云', '星星', '花朵'].sort());
+});

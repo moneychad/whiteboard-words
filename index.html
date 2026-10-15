@@ -307,8 +307,15 @@
             <h2 id="review-title">复习</h2>
             <span id="dueBadge" class="badge accent">0 个到期</span>
           </div>
-          <p class="hint">不认识：当天复习；模糊：1 天后；认识：2 天后；连续两次认识：7 天后。</p>
+          <p class="hint">当日复习：今天学习结果中最近一次为模糊或不认识的词语；合并复习：所有已学习但仍未掌握的词语。</p>
           <div id="reviewStats" class="stats"></div>
+          <div class="field">
+            <span class="field-label">复习类型</span>
+            <div class="button-row">
+              <button id="todayReviewType" class="secondary" type="button">当日复习</button>
+              <button id="mergedReviewType" class="ghost" type="button">合并复习</button>
+            </div>
+          </div>
           <label class="field">
             <span>本次最多复习</span>
             <select id="reviewSize">
@@ -317,7 +324,7 @@
               <option value="16">16 个词语</option>
             </select>
           </label>
-          <button id="startReviewButton" class="primary full-width" type="button">生成复习方阵</button>
+          <button id="startReviewButton" class="primary full-width" type="button">生成当日复习方阵</button>
           <div id="dueList" class="word-list"></div>
         </div>
       </section>
@@ -515,6 +522,38 @@
       });
   }
 
+  function getReviewCandidates(wordStats, sessions, today, reviewType = 'today') {
+    const records = Object.values(wordStats).filter((record) => record.attempts && record.attempts.length);
+    const resultPriority = { unknown: 0, fuzzy: 1, known: 2 };
+    if (reviewType === 'today') {
+      const latestToday = {};
+      Array.from(sessions).filter((session) => session && session.date === today).forEach((session) => {
+        Object.entries(session.results || {}).forEach(([word, result]) => {
+          if (BACKUP_RESULTS.has(result)) latestToday[word] = result;
+        });
+      });
+      return records
+        .filter((record) => ['fuzzy', 'unknown'].includes(latestToday[record.word]))
+        .sort((a, b) => resultPriority[latestToday[a.word]] - resultPriority[latestToday[b.word]]
+          || String(a.nextReview || '').localeCompare(String(b.nextReview || ''))
+          || a.word.localeCompare(b.word, 'zh-CN'));
+    }
+    if (reviewType === 'merged') {
+      const statusPriority = { forgotten: 0, learning: 1, new: 2, mastered: 3 };
+      return records
+        .filter((record) => summarizeWord(record.attempts).status !== 'mastered')
+        .sort((a, b) => {
+          const aSummary = summarizeWord(a.attempts);
+          const bSummary = summarizeWord(b.attempts);
+          return statusPriority[aSummary.status] - statusPriority[bSummary.status]
+            || resultPriority[aSummary.latestResult] - resultPriority[bSummary.latestResult]
+            || String(a.nextReview || '').localeCompare(String(b.nextReview || ''))
+            || a.word.localeCompare(b.word, 'zh-CN');
+        });
+    }
+    throw new Error('未知复习类型');
+  }
+
   function selectReviewWords(dueRecords, maxCount, rng = Math.random) {
     const records = Array.from(dueRecords);
     const limit = Math.min(Number(maxCount), records.length);
@@ -611,6 +650,7 @@
     const source = isPlainObject(settings) ? settings : {};
     const sizes = new Set([4, 9, 16]);
     const topics = new Set(['mixed', 'animals', 'food', 'family', 'nature', 'actions']);
+    const reviewTypes = new Set(['today', 'merged']);
     const size = Number(source.size);
     const reviewSize = Number(source.reviewSize);
     return {
@@ -618,6 +658,7 @@
       topic: topics.has(source.topic) ? source.topic : DEFAULT_SETTINGS.topic,
       size: sizes.has(size) ? size : DEFAULT_SETTINGS.size,
       reviewSize: sizes.has(reviewSize) ? reviewSize : DEFAULT_SETTINGS.reviewSize,
+      reviewType: reviewTypes.has(source.reviewType) ? source.reviewType : 'today',
     };
   }
 
@@ -669,6 +710,7 @@
     parseCustomWords,
     recordSession,
     getDueWords,
+    getReviewCandidates,
     sanitizeBackup,
   };
 })();
@@ -688,7 +730,7 @@
     currentSession: null,
     sessions: [],
     wordStats: {},
-    settings: { level: '0', topic: 'mixed', size: 9, reviewSize: 9 },
+    settings: { level: '0', topic: 'mixed', size: 9, reviewSize: 9, reviewType: 'today' },
   };
 
   const elements = {
@@ -712,6 +754,8 @@
     stage: document.querySelector('#stageButton'),
     closeSession: document.querySelector('#closeSessionButton'),
     reviewSize: document.querySelector('#reviewSize'),
+    todayReviewType: document.querySelector('#todayReviewType'),
+    mergedReviewType: document.querySelector('#mergedReviewType'),
     startReview: document.querySelector('#startReviewButton'),
     reviewStats: document.querySelector('#reviewStats'),
     dueBadge: document.querySelector('#dueBadge'),
@@ -944,29 +988,40 @@
 
   function renderReview() {
     const today = localDate();
-    const due = core.getDueWords(state.wordStats, today);
+    const reviewType = state.settings.reviewType === 'merged' ? 'merged' : 'today';
+    const todayCandidates = core.getReviewCandidates(state.wordStats, state.sessions, today, 'today');
+    const mergedCandidates = core.getReviewCandidates(state.wordStats, state.sessions, today, 'merged');
+    const candidates = reviewType === 'merged' ? mergedCandidates : todayCandidates;
     const records = Object.values(state.wordStats);
     const forgotten = records.filter((record) => core.summarizeWord(record.attempts).status === 'forgotten').length;
-    const learning = records.filter((record) => core.summarizeWord(record.attempts).status === 'learning').length;
-    elements.dueBadge.textContent = `${due.length} 个到期`;
+    elements.dueBadge.textContent = `${candidates.length} 个待复习`;
     elements.reviewStats.innerHTML = [
-      statHtml(due.length, '今日待复习'),
+      statHtml(todayCandidates.length, '当日复习'),
+      statHtml(mergedCandidates.length, '合并复习'),
       statHtml(forgotten, '记住又忘了'),
-      statHtml(learning, '学习中'),
       statHtml(records.length, '已接触词语'),
     ].join('');
-    elements.startReview.disabled = !due.length || Boolean(state.currentSession);
-    elements.startReview.textContent = state.currentSession ? '请先完成或放弃当前方阵' : '生成复习方阵';
+    elements.todayReviewType.classList.toggle('secondary', reviewType === 'today');
+    elements.todayReviewType.classList.toggle('ghost', reviewType !== 'today');
+    elements.mergedReviewType.classList.toggle('secondary', reviewType === 'merged');
+    elements.mergedReviewType.classList.toggle('ghost', reviewType !== 'merged');
+    elements.startReview.disabled = !candidates.length || Boolean(state.currentSession);
+    elements.startReview.textContent = state.currentSession
+      ? '请先完成或放弃当前方阵'
+      : `生成${reviewType === 'merged' ? '合并' : '当日'}复习方阵`;
     elements.reviewSize.value = String(state.settings.reviewSize);
-    elements.dueList.innerHTML = due.length
-      ? due.slice(0, 30).map((record) => wordRecordHtml(record, true)).join('')
-      : '<div class="empty">今天没有到期词语。<br>完成一组学习后，系统会在这里安排复习。</div>';
+    elements.dueList.innerHTML = candidates.length
+      ? candidates.slice(0, 30).map((record) => wordRecordHtml(record, true)).join('')
+      : `<div class="empty">${reviewType === 'merged'
+        ? '没有所有已学习但仍未掌握的词语。'
+        : '今天没有需要当日复习的词语。'}<br>完成一组学习后，系统会在这里安排复习。</div>`;
   }
 
   function startReviewSession() {
     if (state.currentSession) return;
-    const due = core.getDueWords(state.wordStats, localDate());
-    const selectedRecords = core.selectReviewWords(due, Number(elements.reviewSize.value));
+    const reviewType = state.settings.reviewType === 'merged' ? 'merged' : 'today';
+    const candidates = core.getReviewCandidates(state.wordStats, state.sessions, localDate(), reviewType);
+    const selectedRecords = core.selectReviewWords(candidates, Number(elements.reviewSize.value));
     const words = selectedRecords.map((record) => record.word);
     if (!words.length) return;
     state.settings.reviewSize = Number(elements.reviewSize.value);
@@ -1145,6 +1200,16 @@
   elements.saveSession.addEventListener('click', saveCurrentSession);
   elements.closeSession.addEventListener('click', closeCurrentSession);
   elements.startReview.addEventListener('click', startReviewSession);
+  elements.todayReviewType.addEventListener('click', () => {
+    state.settings.reviewType = 'today';
+    persist();
+    renderReview();
+  });
+  elements.mergedReviewType.addEventListener('click', () => {
+    state.settings.reviewType = 'merged';
+    persist();
+    renderReview();
+  });
   elements.reviewSize.addEventListener('change', () => {
     state.settings.reviewSize = Number(elements.reviewSize.value);
     persist();
