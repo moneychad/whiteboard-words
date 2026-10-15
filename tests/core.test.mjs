@@ -191,6 +191,49 @@ test('区分当日复习和合并复习的候选词语', () => {
   assert.deepEqual(Array.from(all, (record) => record.word).sort(), ['太阳', '月亮', '白云', '星星', '花朵'].sort());
 });
 
+test('当日复习取同一天最近一次学习结果', () => {
+  const core = loadCore();
+  const day = '2026-10-15';
+  const make = (id, result, createdAt) => ({
+    id,
+    date: day,
+    createdAt,
+    words: ['乌龟'],
+    results: { 乌龟: result },
+  });
+
+  let stats = core.recordSession({}, make('s1', 'fuzzy', '2026-10-15T08:00:00.000Z'));
+  stats = core.recordSession(stats, make('s2', 'known', '2026-10-15T20:00:00.000Z'));
+  assert.deepEqual(Array.from(core.getReviewCandidates(stats, [
+    make('s2', 'known', '2026-10-15T20:00:00.000Z'),
+    make('s1', 'fuzzy', '2026-10-15T08:00:00.000Z'),
+  ], day, 'today'), (record) => record.word), []);
+
+  stats = core.recordSession({}, make('s3', 'known', '2026-10-15T08:00:00.000Z'));
+  stats = core.recordSession(stats, make('s4', 'fuzzy', '2026-10-15T20:00:00.000Z'));
+  assert.deepEqual(Array.from(core.getReviewCandidates(stats, [
+    make('s4', 'fuzzy', '2026-10-15T20:00:00.000Z'),
+    make('s3', 'known', '2026-10-15T08:00:00.000Z'),
+  ], day, 'today'), (record) => record.word), ['乌龟']);
+
+  stats = core.recordSession({}, make('s5', 'fuzzy', '2026-10-15T08:00:00.000Z'));
+  stats = core.recordSession(stats, make('s6', 'known', '2026-10-15T12:00:00.000Z'));
+  stats = core.recordSession(stats, make('s7', 'unknown', '2026-10-15T20:00:00.000Z'));
+  assert.deepEqual(Array.from(core.getReviewCandidates(stats, [
+    make('s7', 'unknown', '2026-10-15T20:00:00.000Z'),
+    make('s5', 'fuzzy', '2026-10-15T08:00:00.000Z'),
+    make('s6', 'known', '2026-10-15T12:00:00.000Z'),
+  ], day, 'today'), (record) => record.word), ['乌龟']);
+
+  const withoutTimes = [
+    { id: 's9', date: day, words: ['乌龟'], results: { 乌龟: 'known' } },
+    { id: 's8', date: day, words: ['乌龟'], results: { 乌龟: 'fuzzy' } },
+  ];
+  stats = core.recordSession({}, withoutTimes[1]);
+  stats = core.recordSession(stats, withoutTimes[0]);
+  assert.deepEqual(Array.from(core.getReviewCandidates(stats, withoutTimes, day, 'today'), (record) => record.word), []);
+});
+
 test('按本日、本周、本月、全量和自定义范围聚合学习趋势', () => {
   const core = loadCore();
   const sessions = [

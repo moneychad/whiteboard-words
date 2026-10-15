@@ -770,10 +770,23 @@
     const records = Object.values(wordStats).filter((record) => record.attempts && record.attempts.length);
     const resultPriority = { unknown: 0, fuzzy: 1, known: 2 };
     if (reviewType === 'today') {
+      const todaySessions = Array.from(sessions)
+        .filter((session) => session && session.date === today)
+        .map((session) => ({
+          session,
+          timestamp: Date.parse(session.createdAt || ''),
+        }));
+      const useChronology = todaySessions.length > 0
+        && todaySessions.every((entry) => !Number.isNaN(entry.timestamp));
+      if (useChronology) {
+        todaySessions.sort((a, b) => a.timestamp - b.timestamp);
+      }
       const latestToday = {};
-      Array.from(sessions).filter((session) => session && session.date === today).forEach((session) => {
+      todaySessions.forEach(({ session }) => {
         Object.entries(session.results || {}).forEach(([word, result]) => {
-          if (BACKUP_RESULTS.has(result)) latestToday[word] = result;
+          if (!BACKUP_RESULTS.has(result)) return;
+          if (!useChronology && Object.hasOwn(latestToday, word)) return;
+          latestToday[word] = result;
         });
       });
       return records
@@ -1299,6 +1312,10 @@
     const selectedRecords = core.selectReviewWords(candidates, Number(elements.reviewSize.value));
     const words = selectedRecords.map((record) => record.word);
     if (!words.length) return;
+    const requestedCount = Math.min(candidates.length, Number(elements.reviewSize.value));
+    if (words.length < requestedCount) {
+      showToast(`因不共用汉字规则，本次只排入 ${words.length} 个词，其余 ${requestedCount - words.length} 个留到下次。`);
+    }
     state.settings.reviewSize = Number(elements.reviewSize.value);
     state.currentSession = createSession(words, { mode: 'review', level: 'custom', topic: 'review' });
     persist();
