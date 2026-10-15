@@ -228,12 +228,14 @@
     .mastery-fill { height: 100%; border-radius: inherit; }
     .range-fields {
       display: grid;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 9px;
       align-items: end;
+      min-width: 0;
       margin: 10px 0 14px;
     }
-    .range-fields .field { margin: 0; }
+    .range-fields .field { min-width: 0; margin: 0; }
+    .range-fields input, .range-fields button { width: 100%; min-width: 0; max-width: 100%; }
     .range-fields button { grid-column: 1 / -1; }
     @media (max-width: 430px) {
       .app { padding-left: 12px; padding-right: 12px; }
