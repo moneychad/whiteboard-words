@@ -173,7 +173,7 @@
       left: 50%;
       bottom: 0;
       display: grid;
-      grid-template-columns: repeat(3, 1fr);
+      grid-template-columns: repeat(4, 1fr);
       width: min(100%, 760px);
       padding: 8px 12px calc(8px + env(safe-area-inset-bottom));
       transform: translateX(-50%);
@@ -201,6 +201,31 @@
     }
     .data-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
     .data-actions .danger { grid-column: 1 / -1; }
+    .trend-insight {
+      margin: 12px 0;
+      padding: 12px 14px;
+      border-radius: 12px;
+      background: var(--accent-soft);
+      color: var(--accent-dark);
+      line-height: 1.55;
+    }
+    .chart-shell {
+      overflow-x: auto;
+      margin: 12px -4px 4px;
+      padding: 4px;
+    }
+    .trend-chart {
+      display: block;
+      width: 100%;
+      min-width: 680px;
+      height: auto;
+    }
+    .chart-legend { display: flex; flex-wrap: wrap; gap: 8px 14px; margin: 10px 0 2px; color: var(--muted); font-size: .78rem; }
+    .legend-dot { display: inline-block; width: 10px; height: 10px; margin-right: 5px; border-radius: 50%; vertical-align: -1px; }
+    .mastery-bars { display: grid; gap: 11px; margin-top: 12px; }
+    .mastery-row { display: grid; grid-template-columns: 72px 1fr 38px; align-items: center; gap: 9px; font-size: .82rem; }
+    .mastery-track { height: 12px; overflow: hidden; border-radius: 999px; background: #ecebe5; }
+    .mastery-fill { height: 100%; border-radius: inherit; }
     @media (max-width: 430px) {
       .app { padding-left: 12px; padding-right: 12px; }
       .panel { padding: 15px; border-radius: 17px; }
@@ -330,6 +355,41 @@
         </div>
       </section>
 
+      <section id="view-stats" class="view" aria-labelledby="stats-title" hidden>
+        <div class="panel">
+          <div class="section-heading">
+            <h2 id="stats-title">学习统计</h2>
+            <span id="statsPeriodBadge" class="badge accent">每日</span>
+          </div>
+          <p class="hint">柱状图展示学习词次及结果构成，折线图展示认识率趋势。</p>
+          <div class="field">
+            <span class="field-label">统计周期</span>
+            <div class="button-row">
+              <button id="dailyStatsType" class="secondary" type="button">每日</button>
+              <button id="weeklyStatsType" class="ghost" type="button">每周</button>
+              <button id="monthlyStatsType" class="ghost" type="button">每月</button>
+              <button id="allStatsType" class="ghost" type="button">全量</button>
+            </div>
+          </div>
+          <div id="trendInsight" class="trend-insight"></div>
+          <div id="trendStats" class="stats"></div>
+          <div class="chart-shell">
+            <svg id="learningChart" class="trend-chart" viewBox="0 0 720 330" role="img" aria-label="学习词次和认识率趋势图"></svg>
+          </div>
+          <div class="chart-legend">
+            <span><i class="legend-dot" style="background:#26735b"></i>认识</span>
+            <span><i class="legend-dot" style="background:#c28a2c"></i>模糊</span>
+            <span><i class="legend-dot" style="background:#b95d52"></i>不认识</span>
+            <span><i class="legend-dot" style="background:#2f6f5e"></i>认识率折线</span>
+          </div>
+          <p class="hint">手机上可左右滑动查看完整趋势。</p>
+        </div>
+        <div class="panel">
+          <h3>当前掌握分布</h3>
+          <div id="masteryBars" class="mastery-bars"></div>
+        </div>
+      </section>
+
       <section id="view-history" class="view" aria-labelledby="history-title" hidden>
         <div class="panel">
           <h2 id="history-title">学习记录</h2>
@@ -357,6 +417,7 @@
   <nav class="bottom-nav" aria-label="主要功能">
     <button class="nav-button active" type="button" data-view="learn"><span class="nav-icon">▦</span>学习</button>
     <button class="nav-button" type="button" data-view="review"><span class="nav-icon">↻</span>复习</button>
+    <button class="nav-button" type="button" data-view="stats"><span class="nav-icon">▥</span>统计</button>
     <button class="nav-button" type="button" data-view="history"><span class="nav-icon">▤</span>记录</button>
   </nav>
   <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
@@ -521,6 +582,133 @@
           || a.nextReview.localeCompare(b.nextReview)
           || a.word.localeCompare(b.word, 'zh-CN');
       });
+  }
+
+  function addUtcDays(date, days) {
+    const next = new Date(date.getTime());
+    next.setUTCDate(next.getUTCDate() + days);
+    return next;
+  }
+
+  function startOfUtcWeek(date) {
+    const result = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+    const daysSinceMonday = (result.getUTCDay() + 6) % 7;
+    result.setUTCDate(result.getUTCDate() - daysSinceMonday);
+    return result;
+  }
+
+  function dateKey(date) {
+    return date.toISOString().slice(0, 10);
+  }
+
+  function monthKey(date) {
+    return date.toISOString().slice(0, 7);
+  }
+
+  function parseUtcDate(value) {
+    return typeof value === 'string' && BACKUP_DATE_PATTERN.test(value)
+      ? new Date(`${value}T00:00:00Z`)
+      : null;
+  }
+
+  function emptyBucket(key, label, wordSet = new Set()) {
+    return {
+      key,
+      label,
+      attempts: 0,
+      uniqueWords: wordSet.size,
+      known: 0,
+      fuzzy: 0,
+      unknown: 0,
+      recognitionRate: 0,
+    };
+  }
+
+  function buildLearningTrend(sessions, mode, today) {
+    const todayDate = parseUtcDate(today);
+    if (!todayDate) throw new Error('统计日期无效');
+    const validSessions = Array.from(sessions)
+      .map((session) => ({ session, date: parseUtcDate(session && session.date) }))
+      .filter((entry) => entry.date && entry.session && entry.session.results);
+
+    let keys = [];
+    let bucketForDate = () => '';
+    if (mode === 'daily') {
+      keys = Array.from({ length: 14 }, (_, index) => dateKey(addUtcDays(todayDate, index - 13)));
+      bucketForDate = dateKey;
+    } else if (mode === 'weekly') {
+      const currentWeek = startOfUtcWeek(todayDate);
+      keys = Array.from({ length: 8 }, (_, index) => dateKey(addUtcDays(currentWeek, (index - 7) * 7)));
+      bucketForDate = (date) => dateKey(startOfUtcWeek(date));
+    } else if (mode === 'monthly' || mode === 'all') {
+      let firstMonth = new Date(Date.UTC(todayDate.getUTCFullYear(), todayDate.getUTCMonth(), 1));
+      let lastMonth = firstMonth;
+      if (mode === 'monthly') {
+        firstMonth = new Date(Date.UTC(todayDate.getUTCFullYear(), todayDate.getUTCMonth() - 5, 1));
+      } else if (validSessions.length) {
+        const sessionMonths = validSessions.map((entry) => new Date(Date.UTC(entry.date.getUTCFullYear(), entry.date.getUTCMonth(), 1)));
+        firstMonth = new Date(Math.min(firstMonth.getTime(), ...sessionMonths.map((date) => date.getTime())));
+        lastMonth = new Date(Math.max(lastMonth.getTime(), ...sessionMonths.map((date) => date.getTime())));
+      }
+      const monthCount = (lastMonth.getUTCFullYear() - firstMonth.getUTCFullYear()) * 12
+        + lastMonth.getUTCMonth() - firstMonth.getUTCMonth() + 1;
+      keys = Array.from({ length: mode === 'monthly' ? 6 : monthCount }, (_, index) => {
+        const month = new Date(Date.UTC(firstMonth.getUTCFullYear(), firstMonth.getUTCMonth() + index, 1));
+        return monthKey(month);
+      });
+      bucketForDate = monthKey;
+    } else {
+      throw new Error('未知统计类型');
+    }
+
+    const bucketsByKey = new Map(keys.map((key) => [key, emptyBucket(key, key)]));
+    const totals = emptyBucket('totals', '总计');
+    const totalWords = new Set();
+
+    validSessions.forEach(({ session, date }) => {
+      const key = bucketForDate(date);
+      const bucket = bucketsByKey.get(key);
+      if (!bucket) return;
+      const bucketWords = bucket.words || (bucket.words = new Set());
+      Object.entries(session.results).forEach(([word, result]) => {
+        if (!BACKUP_RESULTS.has(result)) return;
+        bucket.attempts += 1;
+        bucket[result] += 1;
+        bucketWords.add(word);
+        totalWords.add(word);
+        totals.attempts += 1;
+        totals[result] += 1;
+      });
+    });
+
+    const buckets = Array.from(bucketsByKey.values()).map((bucket) => {
+      bucket.uniqueWords = bucket.words ? bucket.words.size : 0;
+      delete bucket.words;
+      bucket.recognitionRate = bucket.attempts
+        ? Math.round(bucket.known / bucket.attempts * 100)
+        : 0;
+      return bucket;
+    });
+    totals.uniqueWords = totalWords.size;
+    totals.recognitionRate = totals.attempts
+      ? Math.round(totals.known / totals.attempts * 100)
+      : 0;
+
+    const nonEmpty = buckets.filter((bucket) => bucket.attempts > 0);
+    const current = nonEmpty[nonEmpty.length - 1] || null;
+    const previous = nonEmpty[nonEmpty.length - 2] || null;
+    const change = current && previous ? current.recognitionRate - previous.recognitionRate : null;
+    return {
+      mode,
+      buckets,
+      totals,
+      trend: {
+        currentLabel: current ? current.label : null,
+        previousLabel: previous ? previous.label : null,
+        change,
+        direction: change === null ? 'flat' : change > 0 ? 'up' : change < 0 ? 'down' : 'flat',
+      },
+    };
   }
 
   function getReviewCandidates(wordStats, sessions, today, reviewType = 'today') {
@@ -712,6 +900,7 @@
     recordSession,
     getDueWords,
     getReviewCandidates,
+    buildLearningTrend,
     sanitizeBackup,
   };
 })();
@@ -762,6 +951,15 @@
     reviewStats: document.querySelector('#reviewStats'),
     dueBadge: document.querySelector('#dueBadge'),
     dueList: document.querySelector('#dueList'),
+    statsPeriodBadge: document.querySelector('#statsPeriodBadge'),
+    dailyStatsType: document.querySelector('#dailyStatsType'),
+    weeklyStatsType: document.querySelector('#weeklyStatsType'),
+    monthlyStatsType: document.querySelector('#monthlyStatsType'),
+    allStatsType: document.querySelector('#allStatsType'),
+    trendInsight: document.querySelector('#trendInsight'),
+    trendStats: document.querySelector('#trendStats'),
+    learningChart: document.querySelector('#learningChart'),
+    masteryBars: document.querySelector('#masteryBars'),
     historyStats: document.querySelector('#historyStats'),
     wordRecords: document.querySelector('#wordRecords'),
     sessionRecords: document.querySelector('#sessionRecords'),
@@ -774,6 +972,7 @@
 
   let state = loadState();
   let activeView = 'learn';
+  let statsMode = 'daily';
   let toastTimer = null;
 
   function loadState() {
@@ -830,6 +1029,7 @@
       else button.removeAttribute('aria-current');
     });
     if (view === 'review') renderReview();
+    if (view === 'stats') renderStats();
     if (view === 'history') renderHistory();
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
@@ -1044,6 +1244,126 @@
     renderSession();
   }
 
+  function renderStats() {
+    const labels = { daily: '每日', weekly: '每周', monthly: '每月', all: '全量' };
+    const trend = core.buildLearningTrend(state.sessions, statsMode, localDate());
+    const mastered = Object.values(state.wordStats).filter((record) => core.summarizeWord(record.attempts).status === 'mastered').length;
+    elements.statsPeriodBadge.textContent = labels[statsMode];
+    [['daily', elements.dailyStatsType], ['weekly', elements.weeklyStatsType], ['monthly', elements.monthlyStatsType], ['all', elements.allStatsType]]
+      .forEach(([mode, button]) => {
+        button.classList.toggle('secondary', statsMode === mode);
+        button.classList.toggle('ghost', statsMode !== mode);
+      });
+    elements.trendStats.innerHTML = [
+      statHtml(trend.totals.attempts, '学习词次'),
+      statHtml(trend.totals.uniqueWords, '涉及词汇'),
+      statHtml(`${trend.totals.recognitionRate}%`, '认识率'),
+      statHtml(mastered, '已掌握'),
+    ].join('');
+    if (!trend.totals.attempts) {
+      elements.trendInsight.textContent = '本周期还没有学习记录。';
+    } else {
+      const changeText = trend.trend.change === null
+        ? ''
+        : trend.trend.change > 0
+          ? ` 认识率比上一阶段提升 ${trend.trend.change} 个百分点。`
+          : trend.trend.change < 0
+            ? ` 认识率比上一阶段下降 ${Math.abs(trend.trend.change)} 个百分点。`
+            : ' 认识率与上一阶段基本持平。';
+      elements.trendInsight.textContent = `本周期共学习 ${trend.totals.attempts} 词次，涉及 ${trend.totals.uniqueWords} 个词，认识率 ${trend.totals.recognitionRate}%。${changeText}`;
+    }
+    renderLearningChart(trend);
+    renderMasteryBars();
+  }
+
+  function renderLearningChart(trend) {
+    const svg = elements.learningChart;
+    const width = 720;
+    const height = 330;
+    const left = 56;
+    const right = 654;
+    const top = 24;
+    const bottom = 272;
+    const buckets = trend.buckets;
+    const active = buckets.filter((bucket) => bucket.attempts > 0);
+    if (!active.length) {
+      svg.innerHTML = '<text x="360" y="160" text-anchor="middle" fill="#6f7872" font-size="15">暂无学习数据</text>';
+      return;
+    }
+
+    const maxAttempts = Math.max(...buckets.map((bucket) => bucket.attempts), 1);
+    const niceMax = Math.max(4, Math.ceil(maxAttempts / 4) * 4);
+    const band = (right - left) / Math.max(buckets.length, 1);
+    const barWidth = Math.min(42, band * 0.62);
+    const yValue = (value) => bottom - value / niceMax * (bottom - top);
+    const rateY = (rate) => bottom - rate / 100 * (bottom - top);
+    const colors = { known: '#26735b', fuzzy: '#c28a2c', unknown: '#b95d52' };
+    const parts = [];
+
+    for (let step = 0; step <= 4; step += 1) {
+      const value = Math.round(niceMax * (4 - step) / 4);
+      const y = top + (bottom - top) * step / 4;
+      parts.push(`<line x1="${left}" y1="${y}" x2="${right}" y2="${y}" stroke="#e1ded5" stroke-width="1"/>`);
+      parts.push(`<text x="${left - 10}" y="${y + 5}" text-anchor="end" fill="#6f7872" font-size="11">${value}</text>`);
+      parts.push(`<text x="${right + 10}" y="${y + 5}" text-anchor="start" fill="#6f7872" font-size="11">${100 - step * 25}%</text>`);
+    }
+
+    const labelStep = Math.max(1, Math.ceil(buckets.length / 8));
+    buckets.forEach((bucket, index) => {
+      const x = left + band * (index + 0.5);
+      let cumulative = 0;
+      ['known', 'fuzzy', 'unknown'].forEach((result) => {
+        const count = bucket[result];
+        if (!count) return;
+        const yTop = yValue(cumulative + count);
+        const yBottom = yValue(cumulative);
+        parts.push(`<rect x="${x - barWidth / 2}" y="${yTop}" width="${barWidth}" height="${Math.max(1, yBottom - yTop)}" rx="3" fill="${colors[result]}"><title>${escapeHtml(bucket.label)} ${RESULT_NAMES[result]} ${count} 次</title></rect>`);
+        cumulative += count;
+      });
+      if (index % labelStep === 0 || index === buckets.length - 1) {
+        const label = statsMode === 'monthly' || statsMode === 'all' ? bucket.label.slice(5) : bucket.label.slice(5);
+        parts.push(`<text x="${x}" y="${bottom + 24}" text-anchor="end" transform="rotate(-35 ${x} ${bottom + 24})" fill="#6f7872" font-size="11">${escapeHtml(label)}</text>`);
+      }
+    });
+
+    const points = buckets
+      .map((bucket, index) => ({ x: left + band * (index + 0.5), rate: bucket.recognitionRate, hasData: bucket.attempts > 0 }))
+      .filter((point) => point.hasData);
+    if (points.length > 1) {
+      const path = points.map((point, index) => `${index ? 'L' : 'M'} ${point.x} ${rateY(point.rate)}`).join(' ');
+      parts.push(`<path d="${path}" fill="none" stroke="#2f6f5e" stroke-width="3"/>`);
+    }
+    points.forEach((point) => {
+      parts.push(`<circle cx="${point.x}" cy="${rateY(point.rate)}" r="4" fill="#fff" stroke="#2f6f5e" stroke-width="2"><title>认识率 ${point.rate}%</title></circle>`);
+    });
+
+    parts.push(`<text x="${left}" y="15" fill="#26735b" font-size="12">柱状：学习词次</text>`);
+    parts.push(`<text x="${right}" y="15" text-anchor="end" fill="#2f6f5e" font-size="12">折线：认识率</text>`);
+    svg.innerHTML = parts.join('');
+  }
+
+  function renderMasteryBars() {
+    const records = Object.values(state.wordStats);
+    const counts = { mastered: 0, learning: 0, forgotten: 0 };
+    records.forEach((record) => {
+      const status = core.summarizeWord(record.attempts).status;
+      if (Object.hasOwn(counts, status)) counts[status] += 1;
+    });
+    const total = Math.max(records.length, 1);
+    const rows = [
+      ['已掌握', counts.mastered, '#26735b'],
+      ['学习中', counts.learning, '#c28a2c'],
+      ['记住又忘了', counts.forgotten, '#b95d52'],
+    ];
+    elements.masteryBars.innerHTML = rows.map(([label, value, color]) => `
+      <div class="mastery-row">
+        <span>${label}</span>
+        <div class="mastery-track"><div class="mastery-fill" style="width:${Math.round(value / total * 100)}%;background:${color}"></div></div>
+        <strong>${value}</strong>
+      </div>
+    `).join('');
+  }
+
   function statHtml(value, label) {
     return `<div class="stat"><strong>${escapeHtml(value)}</strong><span>${escapeHtml(label)}</span></div>`;
   }
@@ -1184,6 +1504,7 @@
   function renderAll() {
     renderSession();
     renderReview();
+    renderStats();
     renderHistory();
   }
 
@@ -1213,6 +1534,22 @@
   elements.saveSession.addEventListener('click', saveCurrentSession);
   elements.closeSession.addEventListener('click', closeCurrentSession);
   elements.startReview.addEventListener('click', startReviewSession);
+  elements.dailyStatsType.addEventListener('click', () => {
+    statsMode = 'daily';
+    renderStats();
+  });
+  elements.weeklyStatsType.addEventListener('click', () => {
+    statsMode = 'weekly';
+    renderStats();
+  });
+  elements.monthlyStatsType.addEventListener('click', () => {
+    statsMode = 'monthly';
+    renderStats();
+  });
+  elements.allStatsType.addEventListener('click', () => {
+    statsMode = 'all';
+    renderStats();
+  });
   elements.todayReviewType.addEventListener('click', () => {
     state.settings.reviewType = 'today';
     persist();
