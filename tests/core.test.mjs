@@ -187,4 +187,6 @@ test('区分当日复习和合并复习的候选词语', () => {
   assert.deepEqual(Array.from(today, (record) => record.word).sort(), ['月亮', '白云', '花朵'].sort());
   const merged = core.getReviewCandidates(wordStats, sessions, '2026-10-15', 'merged');
   assert.deepEqual(Array.from(merged, (record) => record.word).sort(), ['月亮', '白云', '星星', '花朵'].sort());
+  const all = core.getReviewCandidates(wordStats, sessions, '2026-10-15', 'all');
+  assert.deepEqual(Array.from(all, (record) => record.word).sort(), ['太阳', '月亮', '白云', '星星', '花朵'].sort());
 });

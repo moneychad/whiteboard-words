@@ -307,13 +307,14 @@
             <h2 id="review-title">复习</h2>
             <span id="dueBadge" class="badge accent">0 个到期</span>
           </div>
-          <p class="hint">当日复习：今天学习结果中最近一次为模糊或不认识的词语；合并复习：所有已学习但仍未掌握的词语。</p>
+          <p class="hint">当日复习：今天学习结果中最近一次为模糊或不认识的词语；合并复习：所有已学习但仍未掌握的词语；全量复习：所有已学习过的词语。</p>
           <div id="reviewStats" class="stats"></div>
           <div class="field">
             <span class="field-label">复习类型</span>
             <div class="button-row">
               <button id="todayReviewType" class="secondary" type="button">当日复习</button>
               <button id="mergedReviewType" class="ghost" type="button">合并复习</button>
+              <button id="allReviewType" class="ghost" type="button">全量复习</button>
             </div>
           </div>
           <label class="field">
@@ -538,10 +539,10 @@
           || String(a.nextReview || '').localeCompare(String(b.nextReview || ''))
           || a.word.localeCompare(b.word, 'zh-CN'));
     }
-    if (reviewType === 'merged') {
+    if (reviewType === 'merged' || reviewType === 'all') {
       const statusPriority = { forgotten: 0, learning: 1, new: 2, mastered: 3 };
       return records
-        .filter((record) => summarizeWord(record.attempts).status !== 'mastered')
+        .filter((record) => reviewType === 'all' || summarizeWord(record.attempts).status !== 'mastered')
         .sort((a, b) => {
           const aSummary = summarizeWord(a.attempts);
           const bSummary = summarizeWord(b.attempts);
@@ -650,7 +651,7 @@
     const source = isPlainObject(settings) ? settings : {};
     const sizes = new Set([4, 9, 16]);
     const topics = new Set(['mixed', 'animals', 'food', 'family', 'nature', 'actions']);
-    const reviewTypes = new Set(['today', 'merged']);
+    const reviewTypes = new Set(['today', 'merged', 'all']);
     const size = Number(source.size);
     const reviewSize = Number(source.reviewSize);
     return {
@@ -756,6 +757,7 @@
     reviewSize: document.querySelector('#reviewSize'),
     todayReviewType: document.querySelector('#todayReviewType'),
     mergedReviewType: document.querySelector('#mergedReviewType'),
+    allReviewType: document.querySelector('#allReviewType'),
     startReview: document.querySelector('#startReviewButton'),
     reviewStats: document.querySelector('#reviewStats'),
     dueBadge: document.querySelector('#dueBadge'),
@@ -988,38 +990,49 @@
 
   function renderReview() {
     const today = localDate();
-    const reviewType = state.settings.reviewType === 'merged' ? 'merged' : 'today';
+    const reviewType = ['today', 'merged', 'all'].includes(state.settings.reviewType)
+      ? state.settings.reviewType
+      : 'today';
     const todayCandidates = core.getReviewCandidates(state.wordStats, state.sessions, today, 'today');
     const mergedCandidates = core.getReviewCandidates(state.wordStats, state.sessions, today, 'merged');
-    const candidates = reviewType === 'merged' ? mergedCandidates : todayCandidates;
+    const allCandidates = core.getReviewCandidates(state.wordStats, state.sessions, today, 'all');
+    const candidates = reviewType === 'today'
+      ? todayCandidates
+      : reviewType === 'merged' ? mergedCandidates : allCandidates;
     const records = Object.values(state.wordStats);
     const forgotten = records.filter((record) => core.summarizeWord(record.attempts).status === 'forgotten').length;
+    const reviewName = { today: '当日', merged: '合并', all: '全量' }[reviewType];
     elements.dueBadge.textContent = `${candidates.length} 个待复习`;
     elements.reviewStats.innerHTML = [
       statHtml(todayCandidates.length, '当日复习'),
       statHtml(mergedCandidates.length, '合并复习'),
+      statHtml(allCandidates.length, '全量复习'),
       statHtml(forgotten, '记住又忘了'),
-      statHtml(records.length, '已接触词语'),
     ].join('');
-    elements.todayReviewType.classList.toggle('secondary', reviewType === 'today');
-    elements.todayReviewType.classList.toggle('ghost', reviewType !== 'today');
-    elements.mergedReviewType.classList.toggle('secondary', reviewType === 'merged');
-    elements.mergedReviewType.classList.toggle('ghost', reviewType !== 'merged');
+    [['today', elements.todayReviewType], ['merged', elements.mergedReviewType], ['all', elements.allReviewType]]
+      .forEach(([type, button]) => {
+        button.classList.toggle('secondary', reviewType === type);
+        button.classList.toggle('ghost', reviewType !== type);
+      });
     elements.startReview.disabled = !candidates.length || Boolean(state.currentSession);
     elements.startReview.textContent = state.currentSession
       ? '请先完成或放弃当前方阵'
-      : `生成${reviewType === 'merged' ? '合并' : '当日'}复习方阵`;
+      : `生成${reviewName}复习方阵`;
     elements.reviewSize.value = String(state.settings.reviewSize);
     elements.dueList.innerHTML = candidates.length
       ? candidates.slice(0, 30).map((record) => wordRecordHtml(record, true)).join('')
-      : `<div class="empty">${reviewType === 'merged'
-        ? '没有所有已学习但仍未掌握的词语。'
-        : '今天没有需要当日复习的词语。'}<br>完成一组学习后，系统会在这里安排复习。</div>`;
+      : `<div class="empty">${reviewType === 'all'
+        ? '还没有已学习过的词语。'
+        : reviewType === 'merged'
+          ? '没有所有已学习但仍未掌握的词语。'
+          : '今天没有需要当日复习的词语。'}<br>完成一组学习后，系统会在这里安排复习。</div>`;
   }
 
   function startReviewSession() {
     if (state.currentSession) return;
-    const reviewType = state.settings.reviewType === 'merged' ? 'merged' : 'today';
+    const reviewType = ['today', 'merged', 'all'].includes(state.settings.reviewType)
+      ? state.settings.reviewType
+      : 'today';
     const candidates = core.getReviewCandidates(state.wordStats, state.sessions, localDate(), reviewType);
     const selectedRecords = core.selectReviewWords(candidates, Number(elements.reviewSize.value));
     const words = selectedRecords.map((record) => record.word);
@@ -1207,6 +1220,11 @@
   });
   elements.mergedReviewType.addEventListener('click', () => {
     state.settings.reviewType = 'merged';
+    persist();
+    renderReview();
+  });
+  elements.allReviewType.addEventListener('click', () => {
+    state.settings.reviewType = 'all';
     persist();
     renderReview();
   });
