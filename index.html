@@ -323,7 +323,7 @@
           <div id="wordGrid" class="word-grid" aria-label="词语方阵"></div>
           <div id="recordToolbar" class="record-toolbar hidden">
             <div class="result-legend"><span>点按词语切换结果：</span><span>✓ 认识</span><span>△ 模糊</span><span>× 不认识</span></div>
-            <p class="hint"><span id="markedCount" class="marked-count">已标记 0/0</span> · 连续两次“认识”记为已掌握</p>
+            <p class="hint"><span id="markedCount" class="marked-count">已标记 0/0</span> · 标一次“认识”即记为已掌握</p>
             <div class="button-row">
               <button id="allKnownButton" class="secondary" type="button">全部认识</button>
               <button id="saveSessionButton" class="primary" type="button" disabled>保存本次学习</button>
@@ -798,7 +798,12 @@
     if (reviewType === 'merged' || reviewType === 'all') {
       const statusPriority = { forgotten: 0, learning: 1, new: 2, mastered: 3 };
       return records
-        .filter((record) => reviewType === 'all' || summarizeWord(record.attempts).status !== 'mastered')
+        .filter((record) => {
+          if (reviewType === 'all') return true;
+          if (summarizeWord(record.attempts).status !== 'mastered') return true;
+          // P2：已掌握但到了复习日期的词也回到合并复习，让「认识 2 天后 / 连续两次认识 7 天后」的排期真正生效
+          return Boolean(record.nextReview) && record.nextReview <= today;
+        })
         .sort((a, b) => {
           const aSummary = summarizeWord(a.attempts);
           const bSummary = summarizeWord(b.attempts);
@@ -956,6 +961,15 @@
     };
   }
 
+  function splitAttemptCounts(attempts, reviewSessionIds) {
+    const attemptsSoFar = Array.from(attempts);
+    const reviewIds = reviewSessionIds instanceof Set
+      ? reviewSessionIds
+      : new Set(Array.from(reviewSessionIds || []));
+    const reviewCount = attemptsSoFar.filter((attempt) => reviewIds.has(attempt.sessionId)).length;
+    return { learnCount: attemptsSoFar.length - reviewCount, reviewCount };
+  }
+
   globalThis.WordBoardCore = {
     WORD_BANK,
     shuffleAvoidingFixedPoints,
@@ -969,6 +983,7 @@
     getDueWords,
     getReviewCandidates,
     buildLearningTrend,
+    splitAttemptCounts,
     sanitizeBackup,
   };
 })();
@@ -1463,14 +1478,19 @@
 
   function wordRecordHtml(record, compact) {
     const summary = core.summarizeWord(record.attempts);
+    // P4：把「学习次数」拆成新学 / 复习两类（复习场次 = mode 为 review 的场次）
+    const reviewSessionIds = new Set(
+      state.sessions.filter((session) => session && session.mode === 'review').map((session) => session.id),
+    );
+    const { learnCount, reviewCount } = core.splitAttemptCounts(record.attempts, reviewSessionIds);
     const unmastered = summary.status === 'learning' && summary.attempts > 1 && summary.knownCount === 0
-      ? ` · ${summary.attempts}次学习仍未认识`
+      ? ` · ${summary.attempts} 次都没认对`
       : '';
     const dueText = record.nextReview <= localDate() ? '今天到期' : `${record.nextReview} 复习`;
     return `<article class="word-record">
       <div class="word-record-main">
         <div><div class="word-name">${escapeHtml(record.word)}</div>
-        <div class="record-meta">学习 ${summary.attempts} 次 · 认识 ${summary.knownCount} 次${escapeHtml(unmastered)}</div></div>
+        <div class="record-meta">新学 ${learnCount} 次 · 复习 ${reviewCount} 次 · 认识 ${summary.knownCount} 次${escapeHtml(unmastered)}</div></div>
         <span class="badge status-${summary.status}">${STATUS_NAMES[summary.status]}</span>
       </div>
       <div class="record-meta">${compact ? escapeHtml(dueText) : `下次复习：${escapeHtml(record.nextReview || '未安排')}`}</div>

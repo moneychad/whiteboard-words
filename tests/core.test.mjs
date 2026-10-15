@@ -234,6 +234,35 @@ test('当日复习取同一天最近一次学习结果', () => {
   assert.deepEqual(Array.from(core.getReviewCandidates(stats, withoutTimes, day, 'today'), (record) => record.word), []);
 });
 
+test('合并复习包含已掌握且已到期的词语，但排除未到期词', () => {
+  const core = loadCore();
+  const attempt = (result) => [{ sessionId: 'seed', date: '2026-10-15', result }];
+  const wordStats = {
+    太阳: { word: '太阳', attempts: attempt('known'), nextReview: '2026-10-15' },
+    白云: { word: '白云', attempts: attempt('known'), nextReview: '2026-10-16' },
+    月亮: { word: '月亮', attempts: attempt('fuzzy'), nextReview: '2026-10-15' },
+  };
+  const merged = core.getReviewCandidates(wordStats, [], '2026-10-15', 'merged');
+  assert.deepEqual(Array.from(merged, (record) => record.word).sort(), ['太阳', '月亮'].sort());
+  const all = core.getReviewCandidates(wordStats, [], '2026-10-15', 'all');
+  assert.deepEqual(Array.from(all, (record) => record.word).sort(), ['太阳', '白云', '月亮'].sort());
+});
+
+test('记录次数拆分为新学和复习', () => {
+  const core = loadCore();
+  const mixed = core.splitAttemptCounts([
+    { sessionId: 'learn' },
+    { sessionId: 'review' },
+  ], new Set(['review']));
+  assert.deepEqual({ ...mixed }, { learnCount: 1, reviewCount: 1 });
+
+  const learnOnly = core.splitAttemptCounts([
+    { sessionId: 'learn' },
+    { sessionId: 'learn-2' },
+  ], new Set(['review']));
+  assert.deepEqual({ ...learnOnly }, { learnCount: 2, reviewCount: 0 });
+});
+
 test('按本日、本周、本月、全量和自定义范围聚合学习趋势', () => {
   const core = loadCore();
   const sessions = [
