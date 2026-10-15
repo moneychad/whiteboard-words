@@ -458,7 +458,7 @@
     }
     const hasKnownBefore = attemptsSoFar.some((attempt) => attempt.result === 'known');
     let status = 'learning';
-    if (knownStreak >= 2) status = 'mastered';
+    if (latestResult === 'known') status = 'mastered';
     else if (hasKnownBefore && latestResult !== 'known') status = 'forgotten';
     return { status, attempts: attemptsCount, knownCount, knownStreak, latestResult };
   }
@@ -466,7 +466,7 @@
   function getNextReviewDate(attempts, today) {
     const summary = summarizeWord(attempts);
     if (!summary.attempts) return null;
-    const intervals = { unknown: 0, fuzzy: 1, known: summary.knownStreak >= 2 ? 7 : 2 };
+    const intervals = { unknown: 0, fuzzy: 0, known: summary.knownStreak >= 2 ? 7 : 2 };
     const date = new Date(`${today}T00:00:00Z`);
     date.setUTCDate(date.getUTCDate() + intervals[summary.latestResult]);
     return date.toISOString().slice(0, 10);
@@ -982,7 +982,9 @@
 
   function wordRecordHtml(record, compact) {
     const summary = core.summarizeWord(record.attempts);
-    const unmastered = summary.status !== 'mastered' ? ` · ${summary.attempts}次学习仍未掌握` : '';
+    const unmastered = summary.status === 'learning' && summary.attempts > 1 && summary.knownCount === 0
+      ? ` · ${summary.attempts}次学习仍未认识`
+      : '';
     const dueText = record.nextReview <= localDate() ? '今天到期' : `${record.nextReview} 复习`;
     return `<article class="word-record">
       <div class="word-record-main">

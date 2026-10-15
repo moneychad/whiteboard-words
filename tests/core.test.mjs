@@ -30,10 +30,11 @@ test('根据学习历史计算掌握状态和记住又忘了', () => {
   };
 
   assert.deepEqual(summarize([]), { status: 'new', attempts: 0 });
-  assert.deepEqual(summarize(['known']), { status: 'learning', attempts: 1 });
+  assert.deepEqual(summarize(['known']), { status: 'mastered', attempts: 1 });
   assert.deepEqual(summarize(['known', 'known']), { status: 'mastered', attempts: 2 });
   assert.deepEqual(summarize(['known', 'unknown']), { status: 'forgotten', attempts: 2 });
   assert.deepEqual(summarize(['unknown', 'fuzzy', 'unknown']), { status: 'learning', attempts: 3 });
+  assert.equal(core.summarizeWord([{ result: 'fuzzy' }]).knownCount, 0);
 });
 
 test('根据本次结果安排下次复习日期', () => {
@@ -43,7 +44,7 @@ test('根据本次结果安排下次复习日期', () => {
     '2026-10-15',
   );
   assert.equal(nextDate(['unknown']), '2026-10-15');
-  assert.equal(nextDate(['fuzzy']), '2026-10-16');
+  assert.equal(nextDate(['fuzzy']), '2026-10-15');
   assert.equal(nextDate(['known']), '2026-10-17');
   assert.equal(nextDate(['known', 'known']), '2026-10-22');
   assert.equal(nextDate([]), null);
@@ -78,6 +79,14 @@ test('保存学习场次后累计每个词语的历史和复习日期', () => {
   assert.equal(core.summarizeWord(second.太阳.attempts).status, 'forgotten');
   assert.equal(second.太阳.nextReview, '2026-10-15');
   assert.equal(first.太阳.attempts.length, 1, '不应修改旧状态');
+
+  const fuzzy = core.recordSession({}, {
+    id: 's3',
+    date: '2026-10-14',
+    words: ['小草'],
+    results: { 小草: 'fuzzy' },
+  });
+  assert.equal(fuzzy.小草.nextReview, '2026-10-14');
 });
 
 test('复习列表只选取到期词语并优先安排困难词', () => {
