@@ -191,7 +191,7 @@ test('区分当日复习和合并复习的候选词语', () => {
   assert.deepEqual(Array.from(all, (record) => record.word).sort(), ['太阳', '月亮', '白云', '星星', '花朵'].sort());
 });
 
-test('按日、周、月和全量聚合学习词次与认识率趋势', () => {
+test('按本日、本周、本月、全量和自定义范围聚合学习趋势', () => {
   const core = loadCore();
   const sessions = [
     {
@@ -211,19 +211,27 @@ test('按日、周、月和全量聚合学习词次与认识率趋势', () => {
     },
   ];
 
-  const daily = core.buildLearningTrend(sessions, 'daily', '2026-10-08');
-  assert.equal(daily.totals.attempts, 3);
-  assert.equal(daily.totals.uniqueWords, 3);
-  assert.equal(daily.totals.recognitionRate, 33);
+  const day = core.buildLearningTrend(sessions, 'day', '2026-10-08');
+  assert.equal(day.totals.attempts, 1);
+  assert.equal(day.totals.recognitionRate, 0);
 
-  const weekly = core.buildLearningTrend(sessions, 'weekly', '2026-10-08');
-  assert.equal(weekly.buckets.filter((bucket) => bucket.attempts > 0).length, 3);
+  const week = core.buildLearningTrend(sessions, 'week', '2026-10-08');
+  assert.equal(week.totals.attempts, 1);
 
-  const monthly = core.buildLearningTrend(sessions, 'monthly', '2026-10-08');
-  assert.deepEqual(Array.from(monthly.buckets.filter((bucket) => bucket.attempts > 0), (bucket) => bucket.key), ['2026-09', '2026-10']);
+  const month = core.buildLearningTrend(sessions, 'month', '2026-10-08');
+  assert.equal(month.totals.attempts, 3);
+  assert.equal(month.totals.uniqueWords, 3);
+  assert.equal(month.totals.recognitionRate, 33);
 
   const all = core.buildLearningTrend(sessions, 'all', '2026-10-08');
   assert.equal(all.totals.attempts, 4);
   assert.ok(all.buckets.some((bucket) => bucket.key === '2026-09'));
   assert.ok(all.buckets.some((bucket) => bucket.key === '2026-10'));
+
+  const range = core.buildLearningTrend(sessions, 'range', '2026-10-08', {
+    startDate: '2026-09-20',
+    endDate: '2026-10-01',
+  });
+  assert.equal(range.totals.attempts, 3);
+  assert.equal(range.buckets.filter((bucket) => bucket.attempts > 0).length, 2);
 });

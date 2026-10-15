@@ -226,6 +226,15 @@
     .mastery-row { display: grid; grid-template-columns: 72px 1fr 38px; align-items: center; gap: 9px; font-size: .82rem; }
     .mastery-track { height: 12px; overflow: hidden; border-radius: 999px; background: #ecebe5; }
     .mastery-fill { height: 100%; border-radius: inherit; }
+    .range-fields {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 9px;
+      align-items: end;
+      margin: 10px 0 14px;
+    }
+    .range-fields .field { margin: 0; }
+    .range-fields button { grid-column: 1 / -1; }
     @media (max-width: 430px) {
       .app { padding-left: 12px; padding-right: 12px; }
       .panel { padding: 15px; border-radius: 17px; }
@@ -365,11 +374,23 @@
           <div class="field">
             <span class="field-label">统计周期</span>
             <div class="button-row">
-              <button id="dailyStatsType" class="secondary" type="button">每日</button>
-              <button id="weeklyStatsType" class="ghost" type="button">每周</button>
-              <button id="monthlyStatsType" class="ghost" type="button">每月</button>
+              <button id="dayStatsType" class="secondary" type="button">本日</button>
+              <button id="weekStatsType" class="ghost" type="button">本周</button>
+              <button id="monthStatsType" class="ghost" type="button">本月</button>
               <button id="allStatsType" class="ghost" type="button">全量</button>
+              <button id="rangeStatsType" class="ghost" type="button">范围</button>
             </div>
+          </div>
+          <div id="statsRangeFields" class="range-fields hidden">
+            <label class="field">
+              <span>开始日期</span>
+              <input id="statsStartDate" type="date">
+            </label>
+            <label class="field">
+              <span>结束日期</span>
+              <input id="statsEndDate" type="date">
+            </label>
+            <button id="applyStatsRange" class="primary" type="button">应用范围</button>
           </div>
           <div id="trendInsight" class="trend-insight"></div>
           <div id="trendStats" class="stats"></div>
@@ -624,7 +645,7 @@
     };
   }
 
-  function buildLearningTrend(sessions, mode, today) {
+  function buildLearningTrend(sessions, mode, today, options = {}) {
     const todayDate = parseUtcDate(today);
     if (!todayDate) throw new Error('统计日期无效');
     const validSessions = Array.from(sessions)
@@ -633,30 +654,61 @@
 
     let keys = [];
     let bucketForDate = () => '';
-    if (mode === 'daily') {
-      keys = Array.from({ length: 14 }, (_, index) => dateKey(addUtcDays(todayDate, index - 13)));
+    let resolution = 'day';
+    if (mode === 'day') {
+      keys = [dateKey(todayDate)];
       bucketForDate = dateKey;
-    } else if (mode === 'weekly') {
+    } else if (mode === 'week') {
       const currentWeek = startOfUtcWeek(todayDate);
-      keys = Array.from({ length: 8 }, (_, index) => dateKey(addUtcDays(currentWeek, (index - 7) * 7)));
-      bucketForDate = (date) => dateKey(startOfUtcWeek(date));
-    } else if (mode === 'monthly' || mode === 'all') {
-      let firstMonth = new Date(Date.UTC(todayDate.getUTCFullYear(), todayDate.getUTCMonth(), 1));
-      let lastMonth = firstMonth;
-      if (mode === 'monthly') {
-        firstMonth = new Date(Date.UTC(todayDate.getUTCFullYear(), todayDate.getUTCMonth() - 5, 1));
-      } else if (validSessions.length) {
-        const sessionMonths = validSessions.map((entry) => new Date(Date.UTC(entry.date.getUTCFullYear(), entry.date.getUTCMonth(), 1)));
-        firstMonth = new Date(Math.min(firstMonth.getTime(), ...sessionMonths.map((date) => date.getTime())));
-        lastMonth = new Date(Math.max(lastMonth.getTime(), ...sessionMonths.map((date) => date.getTime())));
+      keys = Array.from({ length: 7 }, (_, index) => dateKey(addUtcDays(currentWeek, index)));
+      bucketForDate = dateKey;
+    } else if (mode === 'month') {
+      const firstDay = new Date(Date.UTC(todayDate.getUTCFullYear(), todayDate.getUTCMonth(), 1));
+      const dayCount = new Date(Date.UTC(todayDate.getUTCFullYear(), todayDate.getUTCMonth() + 1, 0)).getUTCDate();
+      keys = Array.from({ length: dayCount }, (_, index) => dateKey(addUtcDays(firstDay, index)));
+      bucketForDate = dateKey;
+    } else if (mode === 'all' || mode === 'range') {
+      let firstDate = todayDate;
+      let lastDate = todayDate;
+      if (mode === 'all') {
+        if (validSessions.length) {
+          firstDate = new Date(Math.min(todayDate.getTime(), ...validSessions.map((entry) => entry.date.getTime())));
+          lastDate = new Date(Math.max(todayDate.getTime(), ...validSessions.map((entry) => entry.date.getTime())));
+        }
+        firstDate = new Date(Date.UTC(firstDate.getUTCFullYear(), firstDate.getUTCMonth(), 1));
+        lastDate = new Date(Date.UTC(lastDate.getUTCFullYear(), lastDate.getUTCMonth(), 1));
+      } else {
+        firstDate = parseUtcDate(options.startDate);
+        lastDate = parseUtcDate(options.endDate);
+        if (!firstDate || !lastDate) throw new Error('统计范围日期无效');
+        if (firstDate.getTime() > lastDate.getTime()) throw new Error('统计开始日期不能晚于结束日期');
       }
-      const monthCount = (lastMonth.getUTCFullYear() - firstMonth.getUTCFullYear()) * 12
-        + lastMonth.getUTCMonth() - firstMonth.getUTCMonth() + 1;
-      keys = Array.from({ length: mode === 'monthly' ? 6 : monthCount }, (_, index) => {
-        const month = new Date(Date.UTC(firstMonth.getUTCFullYear(), firstMonth.getUTCMonth() + index, 1));
-        return monthKey(month);
-      });
-      bucketForDate = monthKey;
+      const spanDays = Math.round((lastDate.getTime() - firstDate.getTime()) / 86400000) + 1;
+      if (mode === 'range' && spanDays <= 31) {
+        keys = Array.from({ length: spanDays }, (_, index) => dateKey(addUtcDays(firstDate, index)));
+        bucketForDate = dateKey;
+        resolution = 'day';
+      } else if (mode === 'range' && spanDays <= 184) {
+        firstDate = startOfUtcWeek(firstDate);
+        lastDate = startOfUtcWeek(lastDate);
+        const weekCount = Math.round((lastDate.getTime() - firstDate.getTime()) / (7 * 86400000)) + 1;
+        keys = Array.from({ length: weekCount }, (_, index) => dateKey(addUtcDays(firstDate, index * 7)));
+        bucketForDate = (date) => dateKey(startOfUtcWeek(date));
+        resolution = 'week';
+      } else {
+        if (mode === 'range') {
+          firstDate = new Date(Date.UTC(firstDate.getUTCFullYear(), firstDate.getUTCMonth(), 1));
+          lastDate = new Date(Date.UTC(lastDate.getUTCFullYear(), lastDate.getUTCMonth(), 1));
+        }
+        const monthCount = (lastDate.getUTCFullYear() - firstDate.getUTCFullYear()) * 12
+          + lastDate.getUTCMonth() - firstDate.getUTCMonth() + 1;
+        keys = Array.from({ length: monthCount }, (_, index) => {
+          const month = new Date(Date.UTC(firstDate.getUTCFullYear(), firstDate.getUTCMonth() + index, 1));
+          return monthKey(month);
+        });
+        bucketForDate = monthKey;
+        resolution = 'month';
+      }
     } else {
       throw new Error('未知统计类型');
     }
@@ -700,6 +752,7 @@
     const change = current && previous ? current.recognitionRate - previous.recognitionRate : null;
     return {
       mode,
+      resolution,
       buckets,
       totals,
       trend: {
@@ -952,10 +1005,15 @@
     dueBadge: document.querySelector('#dueBadge'),
     dueList: document.querySelector('#dueList'),
     statsPeriodBadge: document.querySelector('#statsPeriodBadge'),
-    dailyStatsType: document.querySelector('#dailyStatsType'),
-    weeklyStatsType: document.querySelector('#weeklyStatsType'),
-    monthlyStatsType: document.querySelector('#monthlyStatsType'),
+    dayStatsType: document.querySelector('#dayStatsType'),
+    weekStatsType: document.querySelector('#weekStatsType'),
+    monthStatsType: document.querySelector('#monthStatsType'),
     allStatsType: document.querySelector('#allStatsType'),
+    rangeStatsType: document.querySelector('#rangeStatsType'),
+    statsRangeFields: document.querySelector('#statsRangeFields'),
+    statsStartDate: document.querySelector('#statsStartDate'),
+    statsEndDate: document.querySelector('#statsEndDate'),
+    applyStatsRange: document.querySelector('#applyStatsRange'),
     trendInsight: document.querySelector('#trendInsight'),
     trendStats: document.querySelector('#trendStats'),
     learningChart: document.querySelector('#learningChart'),
@@ -972,7 +1030,9 @@
 
   let state = loadState();
   let activeView = 'learn';
-  let statsMode = 'daily';
+  let statsMode = 'day';
+  let statsRangeStart = localDate();
+  let statsRangeEnd = localDate();
   let toastTimer = null;
 
   function loadState() {
@@ -1245,23 +1305,37 @@
   }
 
   function renderStats() {
-    const labels = { daily: '每日', weekly: '每周', monthly: '每月', all: '全量' };
-    const trend = core.buildLearningTrend(state.sessions, statsMode, localDate());
+    const labels = { day: '本日', week: '本周', month: '本月', all: '全量', range: '范围' };
+    let trend;
+    try {
+      trend = core.buildLearningTrend(state.sessions, statsMode, localDate(), {
+        startDate: statsRangeStart,
+        endDate: statsRangeEnd,
+      });
+    } catch (error) {
+      elements.trendInsight.textContent = error.message;
+      elements.trendStats.innerHTML = '';
+      elements.learningChart.innerHTML = '<text x="360" y="160" text-anchor="middle" fill="#6f7872" font-size="15">请选择有效的统计范围</text>';
+      renderMasteryBars();
+      return;
+    }
     const mastered = Object.values(state.wordStats).filter((record) => core.summarizeWord(record.attempts).status === 'mastered').length;
     elements.statsPeriodBadge.textContent = labels[statsMode];
-    [['daily', elements.dailyStatsType], ['weekly', elements.weeklyStatsType], ['monthly', elements.monthlyStatsType], ['all', elements.allStatsType]]
+    [['day', elements.dayStatsType], ['week', elements.weekStatsType], ['month', elements.monthStatsType], ['all', elements.allStatsType], ['range', elements.rangeStatsType]]
       .forEach(([mode, button]) => {
         button.classList.toggle('secondary', statsMode === mode);
         button.classList.toggle('ghost', statsMode !== mode);
       });
+    elements.statsRangeFields.classList.toggle('hidden', statsMode !== 'range');
     elements.trendStats.innerHTML = [
       statHtml(trend.totals.attempts, '学习词次'),
       statHtml(trend.totals.uniqueWords, '涉及词汇'),
       statHtml(`${trend.totals.recognitionRate}%`, '认识率'),
       statHtml(mastered, '已掌握'),
     ].join('');
+    const periodText = statsMode === 'range' ? '所选范围' : labels[statsMode];
     if (!trend.totals.attempts) {
-      elements.trendInsight.textContent = '本周期还没有学习记录。';
+      elements.trendInsight.textContent = `${periodText}还没有学习记录。`;
     } else {
       const changeText = trend.trend.change === null
         ? ''
@@ -1270,7 +1344,7 @@
           : trend.trend.change < 0
             ? ` 认识率比上一阶段下降 ${Math.abs(trend.trend.change)} 个百分点。`
             : ' 认识率与上一阶段基本持平。';
-      elements.trendInsight.textContent = `本周期共学习 ${trend.totals.attempts} 词次，涉及 ${trend.totals.uniqueWords} 个词，认识率 ${trend.totals.recognitionRate}%。${changeText}`;
+      elements.trendInsight.textContent = `${periodText}共学习 ${trend.totals.attempts} 词次，涉及 ${trend.totals.uniqueWords} 个词，认识率 ${trend.totals.recognitionRate}%。${changeText}`;
     }
     renderLearningChart(trend);
     renderMasteryBars();
@@ -1321,7 +1395,7 @@
         cumulative += count;
       });
       if (index % labelStep === 0 || index === buckets.length - 1) {
-        const label = statsMode === 'monthly' || statsMode === 'all' ? bucket.label.slice(5) : bucket.label.slice(5);
+        const label = bucket.label;
         parts.push(`<text x="${x}" y="${bottom + 24}" text-anchor="end" transform="rotate(-35 ${x} ${bottom + 24})" fill="#6f7872" font-size="11">${escapeHtml(label)}</text>`);
       }
     });
@@ -1499,6 +1573,8 @@
     const size = document.querySelector(`input[name="size"][value="${state.settings.size}"]`) || document.querySelector('#size9');
     size.checked = true;
     elements.reviewSize.value = String(state.settings.reviewSize);
+    if (!elements.statsStartDate.value) elements.statsStartDate.value = statsRangeStart;
+    if (!elements.statsEndDate.value) elements.statsEndDate.value = statsRangeEnd;
   }
 
   function renderAll() {
@@ -1534,20 +1610,35 @@
   elements.saveSession.addEventListener('click', saveCurrentSession);
   elements.closeSession.addEventListener('click', closeCurrentSession);
   elements.startReview.addEventListener('click', startReviewSession);
-  elements.dailyStatsType.addEventListener('click', () => {
-    statsMode = 'daily';
+  elements.dayStatsType.addEventListener('click', () => {
+    statsMode = 'day';
     renderStats();
   });
-  elements.weeklyStatsType.addEventListener('click', () => {
-    statsMode = 'weekly';
+  elements.weekStatsType.addEventListener('click', () => {
+    statsMode = 'week';
     renderStats();
   });
-  elements.monthlyStatsType.addEventListener('click', () => {
-    statsMode = 'monthly';
+  elements.monthStatsType.addEventListener('click', () => {
+    statsMode = 'month';
     renderStats();
   });
   elements.allStatsType.addEventListener('click', () => {
     statsMode = 'all';
+    renderStats();
+  });
+  elements.rangeStatsType.addEventListener('click', () => {
+    statsMode = 'range';
+    renderStats();
+  });
+  elements.applyStatsRange.addEventListener('click', () => {
+    const start = elements.statsStartDate.value;
+    const end = elements.statsEndDate.value;
+    if (!start || !end || start > end) {
+      elements.trendInsight.textContent = '请选择有效的开始和结束日期。';
+      return;
+    }
+    statsRangeStart = start;
+    statsRangeEnd = end;
     renderStats();
   });
   elements.todayReviewType.addEventListener('click', () => {
