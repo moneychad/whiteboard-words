@@ -1,0 +1,1161 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f4f0e6">
+  <meta name="mobile-web-app-capable" content="yes">
+  <title>白板词语 · 家长版</title>
+  <style>
+    :root {
+      --bg: #f4f0e6;
+      --panel: #fffdf8;
+      --ink: #26332e;
+      --muted: #6f7872;
+      --line: #dedbd1;
+      --accent: #2f6f5e;
+      --accent-dark: #245849;
+      --accent-soft: #e2efe9;
+      --known: #26735b;
+      --known-bg: #e3f2eb;
+      --fuzzy: #9a6617;
+      --fuzzy-bg: #fff1d5;
+      --unknown: #a44b42;
+      --unknown-bg: #fbe7e2;
+      --shadow: 0 8px 24px rgba(52, 61, 55, .07);
+    }
+    * { box-sizing: border-box; }
+    html { background: var(--bg); }
+    body {
+      margin: 0;
+      min-width: 300px;
+      min-height: 100vh;
+      color: var(--ink);
+      background: var(--bg);
+      font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+      -webkit-tap-highlight-color: transparent;
+    }
+    button, select, textarea, input { font: inherit; }
+    button { color: inherit; }
+    .app { width: min(100%, 760px); margin: 0 auto; padding: 0 16px calc(100px + env(safe-area-inset-bottom)); }
+    .app-header { padding: 24px 2px 14px; }
+    .app-header h1 { margin: 0; font-size: 1.65rem; letter-spacing: .04em; }
+    .app-header p { margin: 6px 0 0; color: var(--muted); font-size: .92rem; }
+    .view[hidden], .hidden { display: none !important; }
+    .panel {
+      margin: 12px 0;
+      padding: 18px;
+      background: var(--panel);
+      border: 1px solid rgba(91, 97, 90, .12);
+      border-radius: 20px;
+      box-shadow: var(--shadow);
+    }
+    .panel h2, .panel h3 { margin: 0 0 8px; }
+    .panel h2 { font-size: 1.25rem; }
+    .panel h3 { font-size: 1.05rem; }
+    .section-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+    .section-heading h2, .section-heading h3 { margin: 0; }
+    .hint { margin: 6px 0; color: var(--muted); font-size: .88rem; line-height: 1.55; }
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .field { display: grid; gap: 7px; margin: 12px 0; }
+    .field > span, .field-label { font-size: .88rem; font-weight: 650; }
+    select, textarea, input[type="file"] {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #fff;
+      color: var(--ink);
+    }
+    select { min-height: 46px; padding: 0 12px; }
+    textarea { min-height: 82px; padding: 11px 12px; resize: vertical; }
+    details { margin: 12px 0; padding: 0 2px; }
+    summary { min-height: 40px; cursor: pointer; color: var(--accent-dark); font-weight: 600; }
+    .size-picker { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .size-picker input { position: absolute; opacity: 0; pointer-events: none; }
+    .size-picker label {
+      display: grid;
+      place-items: center;
+      min-height: 46px;
+      padding: 6px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #fff;
+      cursor: pointer;
+      font-weight: 650;
+    }
+    .size-picker input:checked + label { color: var(--accent-dark); border-color: var(--accent); background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent); }
+    .size-picker input:focus-visible + label { outline: 3px solid rgba(47, 111, 94, .25); }
+    .primary, .secondary, .ghost, .danger {
+      min-height: 46px;
+      padding: 10px 16px;
+      border-radius: 13px;
+      border: 1px solid transparent;
+      cursor: pointer;
+      font-weight: 680;
+    }
+    .primary { background: var(--accent); color: #fff; }
+    .primary:hover { background: var(--accent-dark); }
+    .secondary { background: var(--accent-soft); color: var(--accent-dark); border-color: #c7ded3; }
+    .ghost { background: #fff; border-color: var(--line); }
+    .danger { background: #fff; color: var(--unknown); border-color: #e7c7c1; }
+    button:disabled { opacity: .45; cursor: not-allowed; }
+    button:focus-visible, select:focus-visible, textarea:focus-visible { outline: 3px solid rgba(47, 111, 94, .25); outline-offset: 2px; }
+    .full-width { width: 100%; }
+    .button-row { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 12px; }
+    .button-row > button { flex: 1 1 140px; }
+    .error { min-height: 22px; margin: 8px 0 0; color: var(--unknown); font-size: .88rem; }
+    .session-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; margin-bottom: 12px; }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      min-height: 28px;
+      padding: 4px 9px;
+      border-radius: 999px;
+      background: #efeee9;
+      color: #59625d;
+      font-size: .78rem;
+      font-weight: 650;
+    }
+    .badge.accent { background: var(--accent-soft); color: var(--accent-dark); }
+    .word-grid { display: grid; gap: 10px; margin: 14px 0; }
+    .word-card {
+      display: flex;
+      min-width: 0;
+      min-height: 94px;
+      padding: 8px 4px;
+      align-items: center;
+      justify-content: center;
+      border: 2px solid #252a27;
+      border-radius: 12px;
+      background: #fff;
+      color: #171a18;
+      text-align: center;
+      box-shadow: none;
+      container-type: inline-size;
+    }
+    .word-card .word { white-space: nowrap; font-size: var(--word-size, 2rem); font-weight: 650; letter-spacing: .08em; line-height: 1.15; }
+    button.word-card { width: 100%; cursor: pointer; flex-direction: column; gap: 9px; border-width: 1px; border-color: var(--line); box-shadow: 0 3px 10px rgba(52, 61, 55, .05); }
+    button.word-card .word { font-size: calc(var(--word-size, 2rem) * .82); }
+    .word-card.long-word .word { font-size: min(var(--word-size, 2rem), 26cqw); }
+    button.word-card.long-word .word { font-size: min(calc(var(--word-size, 2rem) * .82), 26cqw); }
+    .card-result { min-height: 20px; color: var(--muted); font-size: .75rem; font-weight: 650; letter-spacing: 0; }
+    .word-card.known { background: var(--known-bg); border-color: #9bc8b5; }
+    .word-card.known .card-result { color: var(--known); }
+    .word-card.fuzzy { background: var(--fuzzy-bg); border-color: #e3c17d; }
+    .word-card.fuzzy .card-result { color: var(--fuzzy); }
+    .word-card.unknown { background: var(--unknown-bg); border-color: #dcaaa2; }
+    .word-card.unknown .card-result { color: var(--unknown); }
+    .record-toolbar { padding-top: 12px; border-top: 1px dashed var(--line); }
+    .result-legend { display: flex; flex-wrap: wrap; gap: 8px 12px; margin: 8px 0; font-size: .8rem; color: var(--muted); }
+    .marked-count { font-weight: 650; }
+    .stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin: 12px 0; }
+    .stat { padding: 14px; border-radius: 15px; background: #f2f4ef; }
+    .stat strong { display: block; font-size: 1.5rem; }
+    .stat span { color: var(--muted); font-size: .8rem; }
+    .word-list, .session-list { display: grid; gap: 9px; margin-top: 12px; }
+    .word-record, .session-record { padding: 13px; border: 1px solid var(--line); border-radius: 14px; background: #fff; }
+    .word-record-main, .session-record-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+    .word-record .word-name { font-size: 1.2rem; font-weight: 700; }
+    .word-record .record-meta, .session-record .record-meta { margin-top: 4px; color: var(--muted); font-size: .78rem; line-height: 1.5; }
+    .status-new { background: #efeee9; color: #5c6560; }
+    .status-learning { background: var(--fuzzy-bg); color: var(--fuzzy); }
+    .status-mastered { background: var(--known-bg); color: var(--known); }
+    .status-forgotten { background: var(--unknown-bg); color: var(--unknown); }
+    .word-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+    .word-chip { padding: 4px 7px; border-radius: 8px; background: #f1f0eb; font-size: .8rem; }
+    .word-chip.known { color: var(--known); background: var(--known-bg); }
+    .word-chip.fuzzy { color: var(--fuzzy); background: var(--fuzzy-bg); }
+    .word-chip.unknown { color: var(--unknown); background: var(--unknown-bg); }
+    .empty { padding: 22px 10px; color: var(--muted); text-align: center; line-height: 1.6; }
+    .bottom-nav {
+      position: fixed;
+      z-index: 10;
+      left: 50%;
+      bottom: 0;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      width: min(100%, 760px);
+      padding: 8px 12px calc(8px + env(safe-area-inset-bottom));
+      transform: translateX(-50%);
+      border-top: 1px solid rgba(91, 97, 90, .15);
+      background: rgba(255, 253, 248, .96);
+      backdrop-filter: blur(12px);
+    }
+    .nav-button { min-height: 54px; border: 0; border-radius: 13px; background: transparent; color: var(--muted); cursor: pointer; font-weight: 650; }
+    .nav-button .nav-icon { display: block; margin-bottom: 2px; font-size: 1.2rem; }
+    .nav-button.active { color: var(--accent-dark); background: var(--accent-soft); }
+    .toast {
+      position: fixed;
+      z-index: 20;
+      left: 50%;
+      bottom: calc(86px + env(safe-area-inset-bottom));
+      max-width: calc(100% - 32px);
+      padding: 11px 16px;
+      transform: translateX(-50%);
+      border-radius: 999px;
+      background: #26332e;
+      color: #fff;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, .2);
+      font-size: .88rem;
+      text-align: center;
+    }
+    .data-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+    .data-actions .danger { grid-column: 1 / -1; }
+    @media (max-width: 430px) {
+      .app { padding-left: 12px; padding-right: 12px; }
+      .panel { padding: 15px; border-radius: 17px; }
+      .form-grid { grid-template-columns: 1fr; gap: 0; }
+      .word-grid { gap: 7px; }
+      .word-card { border-radius: 9px; }
+      .button-row > button { flex-basis: 120px; }
+    }
+    @media (min-width: 620px) {
+      .stats { grid-template-columns: repeat(4, 1fr); }
+    }
+    @media (prefers-reduced-motion: no-preference) {
+      .word-card, .nav-button, button { transition: background-color .16s ease, border-color .16s ease, transform .12s ease; }
+      button.word-card:active { transform: scale(.97); }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="app-header">
+      <h1>白板词语</h1>
+      <p>孩子看白板，家长用手机出题和记录</p>
+    </header>
+
+    <main>
+      <section id="view-learn" class="view" aria-labelledby="learn-title">
+        <div id="setupPanel" class="panel">
+          <div class="section-heading">
+            <h2 id="learn-title">生成今日方阵</h2>
+            <span class="badge accent">2–3 字中文词语</span>
+          </div>
+          <p class="hint">生成后照写到白板。不同词语不会共用汉字；必要时自动加入同难度其他主题。</p>
+          <form id="generatorForm" novalidate>
+            <div class="form-grid">
+              <label class="field">
+                <span>年级难度</span>
+                <select id="levelSelect">
+                  <option value="0">启蒙</option>
+                  <option value="1">幼小衔接</option>
+                  <option value="2">一年级</option>
+                  <option value="3">二年级</option>
+                </select>
+              </label>
+              <label class="field">
+                <span>话题方向</span>
+                <select id="topicSelect">
+                  <option value="mixed">综合</option>
+                  <option value="animals">动物</option>
+                  <option value="food">食物</option>
+                  <option value="family">家庭</option>
+                  <option value="nature">自然</option>
+                  <option value="actions">动作与学习</option>
+                </select>
+              </label>
+            </div>
+            <div class="field">
+              <span class="field-label">方阵大小</span>
+              <div class="size-picker" id="sizePicker">
+                <input type="radio" name="size" id="size4" value="4"><label for="size4">4 词 · 2×2</label>
+                <input type="radio" name="size" id="size9" value="9"><label for="size9">9 词 · 3×3</label>
+                <input type="radio" name="size" id="size16" value="16"><label for="size16">16 词 · 4×4</label>
+              </div>
+            </div>
+            <details>
+              <summary>使用自定义词语（可选）</summary>
+              <label class="field">
+                <span>用空格、逗号或顿号分隔，每个词 2–3 个汉字</span>
+                <textarea id="customWords" placeholder="例如：太阳 月亮 星星 云朵"></textarea>
+              </label>
+              <p class="hint">填写后优先使用自定义词语；数量需不少于所选方阵的词数。</p>
+            </details>
+            <p id="formError" class="error" role="alert"></p>
+            <button class="primary full-width" type="submit">生成词语方阵</button>
+          </form>
+        </div>
+
+        <div id="sessionPanel" class="panel hidden">
+          <div class="section-heading">
+            <h2 id="sessionTitle">本次方阵</h2>
+            <span id="stageBadge" class="badge accent">抄写模式</span>
+          </div>
+          <div id="sessionMeta" class="session-meta"></div>
+          <p id="copyHint" class="hint">请按当前位置抄写到白板。随机重排会尽量避免词语留在原位。</p>
+          <div id="wordGrid" class="word-grid" aria-label="词语方阵"></div>
+          <div id="recordToolbar" class="record-toolbar hidden">
+            <div class="result-legend"><span>点按词语切换结果：</span><span>✓ 认识</span><span>△ 模糊</span><span>× 不认识</span></div>
+            <p class="hint"><span id="markedCount" class="marked-count">已标记 0/0</span> · 连续两次“认识”记为已掌握</p>
+            <div class="button-row">
+              <button id="allKnownButton" class="secondary" type="button">全部认识</button>
+              <button id="saveSessionButton" class="primary" type="button" disabled>保存本次学习</button>
+            </div>
+          </div>
+          <div class="button-row">
+            <button id="shuffleButton" class="ghost" type="button">随机重排位置</button>
+            <button id="stageButton" class="primary" type="button">完成抄写，开始记录</button>
+            <button id="closeSessionButton" class="ghost" type="button">放弃本组</button>
+          </div>
+        </div>
+      </section>
+
+      <section id="view-review" class="view" aria-labelledby="review-title" hidden>
+        <div class="panel">
+          <div class="section-heading">
+            <h2 id="review-title">复习</h2>
+            <span id="dueBadge" class="badge accent">0 个到期</span>
+          </div>
+          <p class="hint">不认识：当天复习；模糊：1 天后；认识：2 天后；连续两次认识：7 天后。</p>
+          <div id="reviewStats" class="stats"></div>
+          <label class="field">
+            <span>本次最多复习</span>
+            <select id="reviewSize">
+              <option value="4">4 个词语</option>
+              <option value="9">9 个词语</option>
+              <option value="16">16 个词语</option>
+            </select>
+          </label>
+          <button id="startReviewButton" class="primary full-width" type="button">生成复习方阵</button>
+          <div id="dueList" class="word-list"></div>
+        </div>
+      </section>
+
+      <section id="view-history" class="view" aria-labelledby="history-title" hidden>
+        <div class="panel">
+          <h2 id="history-title">学习记录</h2>
+          <p class="hint">记录仅保存在当前浏览器中，请定期导出备份。</p>
+          <div id="historyStats" class="stats"></div>
+          <div class="data-actions">
+            <button id="exportButton" class="secondary" type="button">导出备份</button>
+            <button id="importButton" class="ghost" type="button">导入备份</button>
+            <input id="importFile" class="hidden" type="file" accept="application/json,.json">
+            <button id="resetButton" class="danger" type="button">清空全部记录</button>
+          </div>
+        </div>
+        <div class="panel">
+          <h3>词语档案</h3>
+          <div id="wordRecords" class="word-list"></div>
+        </div>
+        <div class="panel">
+          <h3>每日学习场次</h3>
+          <div id="sessionRecords" class="session-list"></div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <nav class="bottom-nav" aria-label="主要功能">
+    <button class="nav-button active" type="button" data-view="learn"><span class="nav-icon">▦</span>学习</button>
+    <button class="nav-button" type="button" data-view="review"><span class="nav-icon">↻</span>复习</button>
+    <button class="nav-button" type="button" data-view="history"><span class="nav-icon">▤</span>记录</button>
+  </nav>
+  <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
+
+  <script id="core">
+(function () {
+  const WORD_BANK = {
+    0: {
+      animals: ['小猫', '小狗', '小兔', '小鸡', '小鸭', '小鸟', '小鱼', '小羊', '小牛', '小马', '熊猫', '老虎', '狮子', '大象', '猴子', '长颈鹿'],
+      food: ['米饭', '面条', '面包', '鸡蛋', '牛奶', '苹果', '香蕉', '西瓜', '葡萄', '草莓', '橙子', '桃子', '黄瓜', '萝卜', '土豆', '玉米'],
+      family: ['爸爸', '妈妈', '爷爷', '奶奶', '哥哥', '姐姐', '弟弟', '妹妹', '外公', '外婆', '叔叔', '阿姨', '家人', '孩子', '宝宝', '家庭'],
+      nature: ['太阳', '月亮', '星星', '天空', '白云', '雨滴', '雪花', '大风', '小山', '河水', '大海', '花朵', '小草', '大树', '树叶', '石头'],
+      actions: ['吃饭', '喝水', '睡觉', '起床', '走路', '跑步', '跳跃', '坐下', '站立', '拍手', '挥手', '看书', '画画', '唱歌', '跳舞', '玩耍'],
+    },
+    1: {
+      animals: ['蝴蝶', '蜜蜂', '蚂蚁', '蜻蜓', '蜘蛛', '蜗牛', '乌龟', '兔子', '青蛙', '蝌蚪', '螃蟹', '贝壳', '海星', '海豚', '鲸鱼', '孔雀'],
+      food: ['包子', '馒头', '饺子', '馄饨', '烧饼', '油条', '豆浆', '豆腐', '蔬菜', '水果', '巧克力', '冰淇淋', '饼干', '蛋糕', '糖果', '饮料'],
+      family: ['舅舅', '舅妈', '姑姑', '姑父', '姨妈', '姨父', '表哥', '表姐', '表弟', '表妹', '堂哥', '堂姐', '亲戚', '兄弟', '姐妹', '祖孙'],
+      nature: ['彩虹', '雷电', '乌云', '露水', '霜冻', '雾气', '河流', '湖泊', '森林', '树林', '草地', '田野', '沙漠', '山洞', '岩石', '泥土'],
+      actions: ['穿衣', '洗脸', '刷牙', '梳头', '洗澡', '扫地', '擦桌', '整理', '收拾', '开门', '关门', '写字', '阅读', '听讲', '提问', '回答'],
+    },
+    2: {
+      animals: ['骆驼', '袋鼠', '松鼠', '刺猬', '蝙蝠', '梅花鹿', '白天鹅', '啄木鸟', '猫头鹰', '大猩猩', '金丝猴', '北极熊', '企鹅', '鳄鱼', '蟒蛇', '蜥蜴'],
+      food: ['西红柿', '马铃薯', '胡萝卜', '大白菜', '卷心菜', '西兰花', '花生米', '哈密瓜', '猕猴桃', '火龙果', '蓝莓', '柠檬', '榴莲', '燕麦', '红薯', '南瓜'],
+      family: ['全家福', '团圆', '陪伴', '关爱', '孝敬', '尊重', '帮忙', '分享', '家务', '劳动', '生日', '礼物', '祝福', '拥抱', '问候', '访客'],
+      nature: ['黎明', '黄昏', '夜晚', '清晨', '阳光', '月光', '星光', '闪电', '雷声', '春风', '秋雨', '冬雪', '小溪', '山峰', '山谷', '海边'],
+      actions: ['观察', '思考', '发现', '比较', '选择', '记录', '朗读', '背诵', '默写', '计算', '检查', '修改', '讨论', '合作', '练习', '复习'],
+    },
+    3: {
+      animals: ['变色龙', '扬子鳄', '穿山甲', '树袋熊', '食蚁兽', '鸭嘴兽', '藏羚羊', '金钱豹', '丹顶鹤', '火烈鸟', '鹦鹉', '杜鹃', '黄鹂', '白鹭', '海马', '水母'],
+      food: ['蛋白质', '维生素', '营养', '健康', '新鲜', '变质', '腐烂', '发酵', '烹饪', '蒸煮', '烧烤', '油炸', '食材', '调料', '味道', '香气'],
+      family: ['亲属', '长辈', '晚辈', '血脉', '遗传', '姓氏', '故乡', '邻居', '社区', '友谊', '关心', '体贴', '谦让', '责任', '感恩', '团聚'],
+      nature: ['气候', '季节', '温度', '湿度', '风向', '暴雨', '冰雹', '干旱', '洪水', '地震', '火山', '岛屿', '海洋', '流域', '高原', '平原'],
+      actions: ['预习', '审题', '解答', '推理', '判断', '验证', '总结', '归纳', '分析', '查阅', '搜索', '实验', '测量', '探索', '创作', '表达'],
+    },
+  };
+
+  function shuffleAvoidingFixedPoints(items, rng = Math.random) {
+    const result = Array.from(items);
+    for (let i = result.length - 1; i > 0; i -= 1) {
+      const j = Math.floor(rng() * i);
+      [result[i], result[j]] = [result[j], result[i]];
+    }
+    return result;
+  }
+
+  function selectWords(candidates, count, rng = Math.random) {
+    const unique = Array.from(new Set(candidates));
+    if (!Number.isInteger(count) || count < 1 || count > unique.length) {
+      throw new Error(`需要 ${count} 个不同词语，当前只有 ${unique.length} 个`);
+    }
+    const result = Array.from(unique);
+    for (let i = 0; i < count; i += 1) {
+      const j = i + Math.floor(rng() * (result.length - i));
+      [result[i], result[j]] = [result[j], result[i]];
+    }
+    return result.slice(0, count);
+  }
+
+  function selectDistinctCharacterWords(candidates, count, rng = Math.random) {
+    const words = Array.from(new Set(candidates));
+    if (!Number.isInteger(count) || count < 1 || count > words.length) {
+      throw new Error(`需要 ${count} 个不同词语，当前只有 ${words.length} 个`);
+    }
+    for (let i = words.length - 1; i > 0; i -= 1) {
+      const j = Math.floor(rng() * (i + 1));
+      [words[i], words[j]] = [words[j], words[i]];
+    }
+    const characterLists = words.map((word) => Array.from(new Set(word)));
+    const selected = [];
+    const usedCharacters = new Set();
+    let visitedNodes = 0;
+    const nodeLimit = 200000;
+
+    function search(startIndex) {
+      visitedNodes += 1;
+      if (selected.length === count) return true;
+      if (visitedNodes > nodeLimit || words.length - startIndex < count - selected.length) return false;
+      for (let i = startIndex; i < words.length; i += 1) {
+        const characters = characterLists[i];
+        if (characters.some((character) => usedCharacters.has(character))) continue;
+        selected.push(words[i]);
+        characters.forEach((character) => usedCharacters.add(character));
+        if (search(i + 1)) return true;
+        characters.forEach((character) => usedCharacters.delete(character));
+        selected.pop();
+        if (visitedNodes > nodeLimit) return false;
+      }
+      return false;
+    }
+
+    if (search(0)) return selected;
+    throw new Error(`无法组成 ${count} 个互不共用汉字的词语，请更换词语或减少数量`);
+  }
+
+  function summarizeWord(attempts) {
+    const attemptsSoFar = Array.from(attempts);
+    const attemptsCount = attemptsSoFar.length;
+    if (!attemptsCount) {
+      return { status: 'new', attempts: 0, knownCount: 0, knownStreak: 0, latestResult: null };
+    }
+    const latestResult = attemptsSoFar[attemptsCount - 1].result;
+    const knownCount = attemptsSoFar.filter((attempt) => attempt.result === 'known').length;
+    let knownStreak = 0;
+    for (let i = attemptsCount - 1; i >= 0 && attemptsSoFar[i].result === 'known'; i -= 1) {
+      knownStreak += 1;
+    }
+    const hasKnownBefore = attemptsSoFar.some((attempt) => attempt.result === 'known');
+    let status = 'learning';
+    if (knownStreak >= 2) status = 'mastered';
+    else if (hasKnownBefore && latestResult !== 'known') status = 'forgotten';
+    return { status, attempts: attemptsCount, knownCount, knownStreak, latestResult };
+  }
+
+  function getNextReviewDate(attempts, today) {
+    const summary = summarizeWord(attempts);
+    if (!summary.attempts) return null;
+    const intervals = { unknown: 0, fuzzy: 1, known: summary.knownStreak >= 2 ? 7 : 2 };
+    const date = new Date(`${today}T00:00:00Z`);
+    date.setUTCDate(date.getUTCDate() + intervals[summary.latestResult]);
+    return date.toISOString().slice(0, 10);
+  }
+
+  function parseCustomWords(text) {
+    const tokens = String(text || '').split(/[\s,，、;；]+/).filter(Boolean);
+    const words = [];
+    const invalid = [];
+    tokens.forEach((token) => {
+      const target = /^[\u3400-\u4dbf\u4e00-\u9fff]{2,3}$/u.test(token) ? words : invalid;
+      if (!target.includes(token)) target.push(token);
+    });
+    return { words, invalid };
+  }
+
+  function recordSession(wordStats, session) {
+    const nextStats = { ...wordStats };
+    session.words.forEach((word) => {
+      const result = session.results[word];
+      if (!['known', 'fuzzy', 'unknown'].includes(result)) {
+        throw new Error(`词语“${word}”缺少有效学习结果`);
+      }
+      const previous = wordStats[word] || { word, attempts: [], nextReview: null };
+      const attempts = previous.attempts.concat({ sessionId: session.id, date: session.date, result });
+      nextStats[word] = {
+        ...previous,
+        word,
+        attempts,
+        nextReview: getNextReviewDate(attempts, session.date),
+      };
+    });
+    return nextStats;
+  }
+
+  function getDueWords(wordStats, today) {
+    const priority = { unknown: 0, fuzzy: 1, known: 2 };
+    return Object.values(wordStats)
+      .filter((record) => record.attempts.length && record.nextReview && record.nextReview <= today)
+      .sort((a, b) => {
+        const aLatest = a.attempts[a.attempts.length - 1].result;
+        const bLatest = b.attempts[b.attempts.length - 1].result;
+        return priority[aLatest] - priority[bLatest]
+          || a.nextReview.localeCompare(b.nextReview)
+          || a.word.localeCompare(b.word, 'zh-CN');
+      });
+  }
+
+  function selectReviewWords(dueRecords, maxCount, rng = Math.random) {
+    const records = Array.from(dueRecords);
+    const limit = Math.min(Number(maxCount), records.length);
+    if (!Number.isInteger(limit) || limit < 1) return [];
+    for (let count = limit; count >= 1; count -= 1) {
+      let selectedWords = null;
+      try {
+        selectedWords = selectDistinctCharacterWords(records.slice(0, count).map((record) => record.word), count, rng);
+      } catch (error) {
+        if (count < records.length) {
+          try {
+            selectedWords = selectDistinctCharacterWords(records.map((record) => record.word), count, rng);
+          } catch (fallbackError) {
+            // 继续尝试更少词语。
+          }
+        }
+      }
+      if (selectedWords) {
+        const byWord = new Map(records.map((record) => [record.word, record]));
+        return selectedWords.map((word) => byWord.get(word)).filter(Boolean);
+      }
+    }
+    return [];
+  }
+
+  const BACKUP_RESULTS = new Set(['known', 'fuzzy', 'unknown']);
+  const BACKUP_WORD_PATTERN = /^[\u3400-\u4dbf\u4e00-\u9fff]{2,3}$/u;
+  const BACKUP_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+  const DEFAULT_SETTINGS = { level: '0', topic: 'mixed', size: 9, reviewSize: 9 };
+
+  function invalidBackup(detail) {
+    throw new Error(`备份格式不正确：${detail}`);
+  }
+
+  function isPlainObject(value) {
+    return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+  }
+
+  function isBackupWord(value) {
+    return typeof value === 'string' && BACKUP_WORD_PATTERN.test(value);
+  }
+
+  function isBackupDate(value) {
+    if (typeof value !== 'string' || !BACKUP_DATE_PATTERN.test(value)) return false;
+    const date = new Date(`${value}T00:00:00Z`);
+    return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
+  }
+
+  function sanitizeOptionalDateTime(value, fieldName) {
+    if (value === null || value === undefined) return null;
+    if (typeof value !== 'string' || Number.isNaN(Date.parse(value))) invalidBackup(`${fieldName} 不是有效时间`);
+    return value;
+  }
+
+  function sanitizeBackupSession(session, index, allowPartial) {
+    if (!isPlainObject(session)) invalidBackup(`第 ${index + 1} 个学习场次不是对象`);
+    if (!Array.isArray(session.words) || !session.words.length || session.words.length > 16) invalidBackup(`第 ${index + 1} 个学习场次的词语数量无效`);
+    const words = session.words.map((word) => {
+      if (!isBackupWord(word)) invalidBackup(`第 ${index + 1} 个学习场次包含无效词语`);
+      return word;
+    });
+    if (new Set(words).size !== words.length) invalidBackup(`第 ${index + 1} 个学习场次包含重复词语`);
+    if (!isPlainObject(session.results)) invalidBackup(`第 ${index + 1} 个学习场次缺少学习结果`);
+    Object.entries(session.results).forEach(([word, result]) => {
+      if (!isBackupWord(word) || !BACKUP_RESULTS.has(result)) invalidBackup(`第 ${index + 1} 个学习场次包含无效学习结果`);
+    });
+    if (!allowPartial && words.some((word) => !session.results[word])) invalidBackup(`第 ${index + 1} 个学习场次缺少词语结果`);
+    if (typeof session.date !== 'string' || !isBackupDate(session.date)) invalidBackup(`第 ${index + 1} 个学习场次日期无效`);
+    const results = {};
+    words.forEach((word) => {
+      if (session.results[word]) results[word] = session.results[word];
+    });
+    return {
+      id: typeof session.id === 'string' && session.id ? session.id : `imported_${index}`,
+      kind: 'chinese-word',
+      mode: session.mode === 'review' ? 'review' : 'learn',
+      createdAt: sanitizeOptionalDateTime(session.createdAt, `第 ${index + 1} 个学习场次的创建时间`),
+      completedAt: sanitizeOptionalDateTime(session.completedAt, `第 ${index + 1} 个学习场次的完成时间`),
+      date: session.date,
+      level: typeof session.level === 'string' ? session.level : 'custom',
+      topic: typeof session.topic === 'string' ? session.topic : 'custom',
+      requestedSize: words.length,
+      columns: Number.isInteger(session.columns) && session.columns >= 1 ? session.columns : Math.ceil(Math.sqrt(words.length)),
+      words,
+      results,
+      stage: allowPartial && ['copy', 'record'].includes(session.stage) ? session.stage : 'completed',
+      photo: typeof session.photo === 'string' ? session.photo : null,
+      ocrResults: Array.isArray(session.ocrResults) ? session.ocrResults : [],
+      expandedTopic: Boolean(session.expandedTopic),
+    };
+  }
+
+  function sanitizeBackupSettings(settings) {
+    const source = isPlainObject(settings) ? settings : {};
+    const sizes = new Set([4, 9, 16]);
+    const topics = new Set(['mixed', 'animals', 'food', 'family', 'nature', 'actions']);
+    const size = Number(source.size);
+    const reviewSize = Number(source.reviewSize);
+    return {
+      level: Object.hasOwn(WORD_BANK, source.level) ? String(source.level) : DEFAULT_SETTINGS.level,
+      topic: topics.has(source.topic) ? source.topic : DEFAULT_SETTINGS.topic,
+      size: sizes.has(size) ? size : DEFAULT_SETTINGS.size,
+      reviewSize: sizes.has(reviewSize) ? reviewSize : DEFAULT_SETTINGS.reviewSize,
+    };
+  }
+
+  function sanitizeBackup(input, options = {}) {
+    if (!isPlainObject(input) || input.version !== 1 || !Array.isArray(input.sessions) || !isPlainObject(input.wordStats)) {
+      invalidBackup('缺少版本、学习场次或词语档案');
+    }
+    const sessions = input.sessions.map((session, index) => sanitizeBackupSession(session, index, false));
+    const wordStats = {};
+    Object.entries(input.wordStats).forEach(([key, record]) => {
+      if (['__proto__', 'constructor', 'prototype'].includes(key) || !isPlainObject(record) || record.word !== key || !isBackupWord(key)) {
+        invalidBackup(`词语档案“${key}”无效`);
+      }
+      if (!Array.isArray(record.attempts)) invalidBackup(`词语“${key}”缺少学习历史`);
+      const attempts = record.attempts.map((attempt, index) => {
+        if (!isPlainObject(attempt) || !isBackupDate(attempt.date) || !BACKUP_RESULTS.has(attempt.result)) {
+          invalidBackup(`词语“${key}”的第 ${index + 1} 条学习历史无效`);
+        }
+        return {
+          sessionId: typeof attempt.sessionId === 'string' ? attempt.sessionId : '',
+          date: attempt.date,
+          result: attempt.result,
+        };
+      });
+      if (record.nextReview !== null && record.nextReview !== undefined && !isBackupDate(record.nextReview)) {
+        invalidBackup(`词语“${key}”的复习日期无效`);
+      }
+      wordStats[key] = { word: key, attempts, nextReview: record.nextReview || null };
+    });
+    return {
+      version: 1,
+      currentSession: options.preserveCurrent && input.currentSession
+        ? sanitizeBackupSession(input.currentSession, 0, true)
+        : null,
+      sessions,
+      wordStats,
+      settings: sanitizeBackupSettings(input.settings),
+    };
+  }
+
+  globalThis.WordBoardCore = {
+    WORD_BANK,
+    shuffleAvoidingFixedPoints,
+    selectWords,
+    selectDistinctCharacterWords,
+    selectReviewWords,
+    summarizeWord,
+    getNextReviewDate,
+    parseCustomWords,
+    recordSession,
+    getDueWords,
+    sanitizeBackup,
+  };
+})();
+  </script>
+
+  <script>
+(function () {
+  'use strict';
+  const core = globalThis.WordBoardCore;
+  const STORAGE_KEY = 'whiteboardWords.v1';
+  const LEVEL_NAMES = { 0: '启蒙', 1: '幼小衔接', 2: '一年级', 3: '二年级', custom: '自定义' };
+  const TOPIC_NAMES = { mixed: '综合', animals: '动物', food: '食物', family: '家庭', nature: '自然', actions: '动作与学习', custom: '自定义', review: '复习' };
+  const RESULT_NAMES = { known: '✓ 认识', fuzzy: '△ 模糊', unknown: '× 不认识' };
+  const STATUS_NAMES = { new: '新词', learning: '学习中', mastered: '已掌握', forgotten: '记住又忘了' };
+  const DEFAULT_STATE = {
+    version: 1,
+    currentSession: null,
+    sessions: [],
+    wordStats: {},
+    settings: { level: '0', topic: 'mixed', size: 9, reviewSize: 9 },
+  };
+
+  const elements = {
+    setupPanel: document.querySelector('#setupPanel'),
+    sessionPanel: document.querySelector('#sessionPanel'),
+    form: document.querySelector('#generatorForm'),
+    level: document.querySelector('#levelSelect'),
+    topic: document.querySelector('#topicSelect'),
+    customWords: document.querySelector('#customWords'),
+    formError: document.querySelector('#formError'),
+    sessionTitle: document.querySelector('#sessionTitle'),
+    sessionMeta: document.querySelector('#sessionMeta'),
+    stageBadge: document.querySelector('#stageBadge'),
+    copyHint: document.querySelector('#copyHint'),
+    wordGrid: document.querySelector('#wordGrid'),
+    recordToolbar: document.querySelector('#recordToolbar'),
+    markedCount: document.querySelector('#markedCount'),
+    allKnown: document.querySelector('#allKnownButton'),
+    saveSession: document.querySelector('#saveSessionButton'),
+    shuffle: document.querySelector('#shuffleButton'),
+    stage: document.querySelector('#stageButton'),
+    closeSession: document.querySelector('#closeSessionButton'),
+    reviewSize: document.querySelector('#reviewSize'),
+    startReview: document.querySelector('#startReviewButton'),
+    reviewStats: document.querySelector('#reviewStats'),
+    dueBadge: document.querySelector('#dueBadge'),
+    dueList: document.querySelector('#dueList'),
+    historyStats: document.querySelector('#historyStats'),
+    wordRecords: document.querySelector('#wordRecords'),
+    sessionRecords: document.querySelector('#sessionRecords'),
+    exportButton: document.querySelector('#exportButton'),
+    importButton: document.querySelector('#importButton'),
+    importFile: document.querySelector('#importFile'),
+    resetButton: document.querySelector('#resetButton'),
+    toast: document.querySelector('#toast'),
+  };
+
+  let state = loadState();
+  let activeView = 'learn';
+  let toastTimer = null;
+
+  function loadState() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
+      return {
+        ...structuredClone(DEFAULT_STATE),
+        ...core.sanitizeBackup(saved, { preserveCurrent: true }),
+      };
+    } catch (error) {
+      return structuredClone(DEFAULT_STATE);
+    }
+  }
+
+  function persist() {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      return true;
+    } catch (error) {
+      showToast('保存失败，请立即导出备份');
+      return false;
+    }
+  }
+
+  function localDate() {
+    const now = new Date();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    return `${now.getFullYear()}-${month}-${day}`;
+  }
+
+  function makeId() {
+    return `s_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+  }
+
+  function escapeHtml(value) {
+    return String(value).replace(/[&<>'"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[char]));
+  }
+
+  function showToast(message) {
+    clearTimeout(toastTimer);
+    elements.toast.textContent = message;
+    elements.toast.classList.remove('hidden');
+    toastTimer = setTimeout(() => elements.toast.classList.add('hidden'), 2400);
+  }
+
+  function switchView(view) {
+    activeView = view;
+    document.querySelectorAll('.view').forEach((section) => { section.hidden = section.id !== `view-${view}`; });
+    document.querySelectorAll('.nav-button').forEach((button) => {
+      const selected = button.dataset.view === view;
+      button.classList.toggle('active', selected);
+      if (selected) button.setAttribute('aria-current', 'page');
+      else button.removeAttribute('aria-current');
+    });
+    if (view === 'review') renderReview();
+    if (view === 'history') renderHistory();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function createSession(words, options) {
+    return {
+      id: makeId(),
+      kind: 'chinese-word',
+      mode: options.mode || 'learn',
+      createdAt: new Date().toISOString(),
+      completedAt: null,
+      date: localDate(),
+      level: options.level,
+      topic: options.topic,
+      requestedSize: words.length,
+      columns: Math.ceil(Math.sqrt(words.length)),
+      words: Array.from(words),
+      results: {},
+      stage: 'copy',
+      photo: null,
+      ocrResults: [],
+    };
+  }
+
+  function generateLearnSession(event) {
+    event.preventDefault();
+    if (state.currentSession && !window.confirm('放弃当前尚未保存的方阵并生成新方阵？')) return;
+    elements.formError.textContent = '';
+    const level = elements.level.value;
+    const topic = elements.topic.value;
+    const size = Number(document.querySelector('input[name="size"]:checked').value);
+    const custom = core.parseCustomWords(elements.customWords.value);
+    if (custom.invalid.length) {
+      elements.formError.textContent = `以下条目不是 2–3 个汉字：${custom.invalid.join('、')}`;
+      return;
+    }
+
+    let candidates;
+    if (custom.words.length) {
+      candidates = custom.words;
+    } else if (topic === 'mixed') {
+      candidates = Object.values(core.WORD_BANK[level]).flat();
+    } else {
+      candidates = core.WORD_BANK[level][topic];
+    }
+
+    try {
+      let words;
+      let expandedTopic = false;
+      try {
+        words = core.selectDistinctCharacterWords(candidates, size);
+      } catch (error) {
+        if (custom.words.length || topic === 'mixed') throw error;
+        candidates = Object.values(core.WORD_BANK[level]).flat();
+        words = core.selectDistinctCharacterWords(candidates, size);
+        expandedTopic = true;
+      }
+      state.currentSession = createSession(words, {
+        level: custom.words.length ? 'custom' : level,
+        topic: custom.words.length ? 'custom' : topic,
+      });
+      state.currentSession.expandedTopic = expandedTopic;
+      state.settings = { ...state.settings, level, topic, size };
+      persist();
+      renderSession();
+      elements.sessionPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } catch (error) {
+      elements.formError.textContent = error.message;
+    }
+  }
+
+  function renderSession() {
+    const session = state.currentSession;
+    elements.setupPanel.classList.toggle('hidden', Boolean(session));
+    elements.sessionPanel.classList.toggle('hidden', !session);
+    if (!session) return;
+
+    const isCopy = session.stage === 'copy';
+    const columns = session.columns || Math.ceil(Math.sqrt(session.words.length));
+    const fontSizes = { 1: '3.4rem', 2: '3.2rem', 3: '2.35rem', 4: '1.65rem' };
+    elements.sessionTitle.textContent = session.mode === 'review' ? '复习方阵' : '本次方阵';
+    elements.stageBadge.textContent = isCopy ? '抄写模式' : '记录模式';
+    elements.copyHint.textContent = isCopy
+      ? '请按当前位置抄写到白板。随机重排会尽量避免词语留在原位。'
+      : '根据孩子在白板上的表现点按标记；孩子无需看手机。';
+    elements.sessionMeta.innerHTML = [
+      `<span class="badge">${escapeHtml(LEVEL_NAMES[session.level] || '自定义')}</span>`,
+      `<span class="badge">${escapeHtml(TOPIC_NAMES[session.topic] || session.topic)}</span>`,
+      `<span class="badge">${session.words.length} 个词</span>`,
+      `<span class="badge">${escapeHtml(session.date)}</span>`,
+      session.expandedTopic ? '<span class="badge accent">已加入同难度其他主题</span>' : '',
+    ].join('');
+    elements.wordGrid.style.gridTemplateColumns = `repeat(${columns}, minmax(0, 1fr))`;
+    elements.wordGrid.style.setProperty('--word-size', fontSizes[columns] || '1.55rem');
+    elements.wordGrid.innerHTML = '';
+
+    session.words.forEach((word) => {
+      const result = session.results[word] || null;
+      const card = document.createElement(isCopy ? 'div' : 'button');
+      const isLongWord = Array.from(word).length >= 3;
+      card.className = `word-card${isLongWord ? ' long-word' : ''}${result ? ` ${result}` : ''}`;
+      card.dataset.word = word;
+      if (!isCopy) {
+        card.type = 'button';
+        card.setAttribute('aria-label', `${word}，${result ? RESULT_NAMES[result] : '未标记'}`);
+      }
+      const wordElement = document.createElement('span');
+      wordElement.className = 'word';
+      wordElement.textContent = word;
+      card.appendChild(wordElement);
+      if (!isCopy) {
+        const resultElement = document.createElement('span');
+        resultElement.className = 'card-result';
+        resultElement.textContent = result ? RESULT_NAMES[result] : '点按标记';
+        card.appendChild(resultElement);
+      }
+      elements.wordGrid.appendChild(card);
+    });
+
+    const marked = session.words.filter((word) => session.results[word]).length;
+    elements.markedCount.textContent = `已标记 ${marked}/${session.words.length}`;
+    elements.recordToolbar.classList.toggle('hidden', isCopy);
+    elements.shuffle.classList.toggle('hidden', !isCopy);
+    elements.stage.textContent = isCopy ? '完成抄写，开始记录' : '返回抄写模式';
+    elements.saveSession.disabled = marked !== session.words.length;
+  }
+
+  function cycleResult(word) {
+    const session = state.currentSession;
+    if (!session || session.stage !== 'record') return;
+    const order = ['known', 'fuzzy', 'unknown'];
+    const current = session.results[word];
+    session.results[word] = current ? order[(order.indexOf(current) + 1) % order.length] : 'known';
+    persist();
+    renderSession();
+  }
+
+  function saveCurrentSession() {
+    const session = state.currentSession;
+    if (!session || session.words.some((word) => !session.results[word])) return;
+    session.completedAt = new Date().toISOString();
+    session.stage = 'completed';
+    state.wordStats = core.recordSession(state.wordStats, session);
+    state.sessions.unshift(session);
+    state.currentSession = null;
+    const saved = persist();
+    renderAll();
+    if (saved) showToast(`已保存 ${session.words.length} 个词语的学习结果`);
+  }
+
+  function closeCurrentSession() {
+    if (!state.currentSession) return;
+    if (!window.confirm('确定放弃当前方阵？尚未保存的标记会丢失。')) return;
+    state.currentSession = null;
+    persist();
+    renderAll();
+  }
+
+  function renderReview() {
+    const today = localDate();
+    const due = core.getDueWords(state.wordStats, today);
+    const records = Object.values(state.wordStats);
+    const forgotten = records.filter((record) => core.summarizeWord(record.attempts).status === 'forgotten').length;
+    const learning = records.filter((record) => core.summarizeWord(record.attempts).status === 'learning').length;
+    elements.dueBadge.textContent = `${due.length} 个到期`;
+    elements.reviewStats.innerHTML = [
+      statHtml(due.length, '今日待复习'),
+      statHtml(forgotten, '记住又忘了'),
+      statHtml(learning, '学习中'),
+      statHtml(records.length, '已接触词语'),
+    ].join('');
+    elements.startReview.disabled = !due.length || Boolean(state.currentSession);
+    elements.startReview.textContent = state.currentSession ? '请先完成或放弃当前方阵' : '生成复习方阵';
+    elements.reviewSize.value = String(state.settings.reviewSize);
+    elements.dueList.innerHTML = due.length
+      ? due.slice(0, 30).map((record) => wordRecordHtml(record, true)).join('')
+      : '<div class="empty">今天没有到期词语。<br>完成一组学习后，系统会在这里安排复习。</div>';
+  }
+
+  function startReviewSession() {
+    if (state.currentSession) return;
+    const due = core.getDueWords(state.wordStats, localDate());
+    const selectedRecords = core.selectReviewWords(due, Number(elements.reviewSize.value));
+    const words = selectedRecords.map((record) => record.word);
+    if (!words.length) return;
+    state.settings.reviewSize = Number(elements.reviewSize.value);
+    state.currentSession = createSession(words, { mode: 'review', level: 'custom', topic: 'review' });
+    persist();
+    switchView('learn');
+    renderSession();
+  }
+
+  function statHtml(value, label) {
+    return `<div class="stat"><strong>${escapeHtml(value)}</strong><span>${escapeHtml(label)}</span></div>`;
+  }
+
+  function wordRecordHtml(record, compact) {
+    const summary = core.summarizeWord(record.attempts);
+    const unmastered = summary.status !== 'mastered' ? ` · ${summary.attempts}次学习仍未掌握` : '';
+    const dueText = record.nextReview <= localDate() ? '今天到期' : `${record.nextReview} 复习`;
+    return `<article class="word-record">
+      <div class="word-record-main">
+        <div><div class="word-name">${escapeHtml(record.word)}</div>
+        <div class="record-meta">学习 ${summary.attempts} 次 · 认识 ${summary.knownCount} 次${escapeHtml(unmastered)}</div></div>
+        <span class="badge status-${summary.status}">${STATUS_NAMES[summary.status]}</span>
+      </div>
+      <div class="record-meta">${compact ? escapeHtml(dueText) : `下次复习：${escapeHtml(record.nextReview || '未安排')}`}</div>
+    </article>`;
+  }
+
+  function renderHistory() {
+    const today = localDate();
+    const todaySessions = state.sessions.filter((session) => session.date === today);
+    const records = Object.values(state.wordStats).sort((a, b) => {
+      const statusA = core.summarizeWord(a.attempts).status;
+      const statusB = core.summarizeWord(b.attempts).status;
+      const priority = { forgotten: 0, learning: 1, mastered: 2, new: 3 };
+      return priority[statusA] - priority[statusB] || a.word.localeCompare(b.word, 'zh-CN');
+    });
+    const mastered = records.filter((record) => core.summarizeWord(record.attempts).status === 'mastered').length;
+    const forgotten = records.filter((record) => core.summarizeWord(record.attempts).status === 'forgotten').length;
+    const todayWords = todaySessions.reduce((sum, session) => sum + session.words.length, 0);
+    const todayResults = todaySessions.flatMap((session) => Object.values(session.results));
+    const knownPercent = todayResults.length
+      ? Math.round(todayResults.filter((result) => result === 'known').length / todayResults.length * 100)
+      : 0;
+    elements.historyStats.innerHTML = [
+      statHtml(todaySessions.length, '今日场次'),
+      statHtml(todayWords, '今日学习词次'),
+      statHtml(`${knownPercent}%`, '今日认识率'),
+      statHtml(mastered, '已掌握'),
+      statHtml(forgotten, '记住又忘了'),
+      statHtml(records.length, '词语档案'),
+    ].join('');
+    elements.wordRecords.innerHTML = records.length
+      ? records.map((record) => wordRecordHtml(record, false)).join('')
+      : '<div class="empty">还没有词语记录。</div>';
+    elements.sessionRecords.innerHTML = state.sessions.length
+      ? state.sessions.map((session) => {
+        const counts = { known: 0, fuzzy: 0, unknown: 0 };
+        Object.values(session.results).forEach((result) => {
+          if (Object.hasOwn(counts, result)) counts[result] += 1;
+        });
+        return `<article class="session-record">
+          <div class="session-record-head">
+            <strong>${escapeHtml(session.date)} · ${session.mode === 'review' ? '复习' : '学习'}</strong>
+            <span class="badge">${session.words.length} 词</span>
+          </div>
+          <div class="record-meta">${escapeHtml(LEVEL_NAMES[session.level] || '自定义')} · ${escapeHtml(TOPIC_NAMES[session.topic] || session.topic)} · ✓${counts.known} △${counts.fuzzy} ×${counts.unknown}</div>
+          <div class="word-chips">${session.words.map((word) => {
+            const result = session.results[word];
+            const resultClass = RESULT_NAMES[result] ? result : '';
+            return `<span class="word-chip${resultClass ? ` ${resultClass}` : ''}">${escapeHtml(word)}</span>`;
+          }).join('')}</div>
+        </article>`;
+      }).join('')
+      : '<div class="empty">保存第一组学习结果后，会在这里看到每日记录。</div>';
+  }
+
+  function exportData() {
+    const payload = JSON.stringify(state, null, 2);
+    const blob = new Blob([payload], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `白板词语-${localDate()}.json`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    showToast('备份已导出');
+  }
+
+  async function importData(file) {
+    if (!file) return;
+    try {
+      const imported = JSON.parse(await file.text());
+      const sanitized = core.sanitizeBackup(imported);
+      if (!window.confirm('导入会替换当前浏览器中的全部记录，是否继续？')) return;
+      const previousState = state;
+      state = {
+        ...structuredClone(DEFAULT_STATE),
+        ...sanitized,
+        currentSession: null,
+      };
+      const saved = persist();
+      if (!saved) {
+        state = previousState;
+        applySettings();
+        renderAll();
+        return;
+      }
+      applySettings();
+      renderAll();
+      showToast('备份已导入');
+    } catch (error) {
+      showToast(`导入失败：${error.message}`);
+    } finally {
+      elements.importFile.value = '';
+    }
+  }
+
+  function resetData() {
+    if (!window.confirm('确定清空全部学习记录？此操作无法撤销，建议先导出备份。')) return;
+    const previousState = state;
+    state = structuredClone(DEFAULT_STATE);
+    const saved = persist();
+    if (!saved) {
+      state = previousState;
+      applySettings();
+      renderAll();
+      return;
+    }
+    applySettings();
+    elements.customWords.value = '';
+    renderAll();
+    showToast('全部记录已清空');
+  }
+
+  function applySettings() {
+    elements.level.value = state.settings.level;
+    elements.topic.value = state.settings.topic;
+    const size = document.querySelector(`input[name="size"][value="${state.settings.size}"]`) || document.querySelector('#size9');
+    size.checked = true;
+    elements.reviewSize.value = String(state.settings.reviewSize);
+  }
+
+  function renderAll() {
+    renderSession();
+    renderReview();
+    renderHistory();
+  }
+
+  elements.form.addEventListener('submit', generateLearnSession);
+  elements.wordGrid.addEventListener('click', (event) => {
+    const card = event.target.closest('button.word-card');
+    if (card) cycleResult(card.dataset.word);
+  });
+  elements.shuffle.addEventListener('click', () => {
+    if (!state.currentSession || state.currentSession.stage !== 'copy') return;
+    state.currentSession.words = core.shuffleAvoidingFixedPoints(state.currentSession.words);
+    persist();
+    renderSession();
+  });
+  elements.stage.addEventListener('click', () => {
+    if (!state.currentSession) return;
+    state.currentSession.stage = state.currentSession.stage === 'copy' ? 'record' : 'copy';
+    persist();
+    renderSession();
+  });
+  elements.allKnown.addEventListener('click', () => {
+    if (!state.currentSession) return;
+    state.currentSession.words.forEach((word) => { state.currentSession.results[word] = 'known'; });
+    persist();
+    renderSession();
+  });
+  elements.saveSession.addEventListener('click', saveCurrentSession);
+  elements.closeSession.addEventListener('click', closeCurrentSession);
+  elements.startReview.addEventListener('click', startReviewSession);
+  elements.reviewSize.addEventListener('change', () => {
+    state.settings.reviewSize = Number(elements.reviewSize.value);
+    persist();
+  });
+  elements.exportButton.addEventListener('click', exportData);
+  elements.importButton.addEventListener('click', () => elements.importFile.click());
+  elements.importFile.addEventListener('change', () => importData(elements.importFile.files[0]));
+  elements.resetButton.addEventListener('click', resetData);
+  document.querySelectorAll('.nav-button').forEach((button) => button.addEventListener('click', () => switchView(button.dataset.view)));
+
+  applySettings();
+  renderAll();
+})();
+  </script>
+</body>
+</html>
